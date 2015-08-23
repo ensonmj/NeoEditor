@@ -22,3 +22,7 @@ _testmain.go
 *.exe
 *.test
 *.prof
+
+*.sw[o|p]
+*.log
+frontend/termbox/main/main
