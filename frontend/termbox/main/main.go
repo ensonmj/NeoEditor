@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 
+	"github.com/ensonmj/NeoEditor/lib/log"
 	"github.com/nsf/termbox-go"
 )
 
@@ -11,6 +12,12 @@ var keyCh []rune
 
 func main() {
 	flag.Parse()
+
+	lg := log.NewDefaultLogger(log.FINEST)
+	defer lg.Close()
+	lg.AddFilter("file", log.FINEST, log.NewFileLogWriter("./ne.log"))
+	lg.Finest("NeoEditor started")
+	defer lg.Finest("NeoEditor quit")
 
 	shutdown = make(chan bool, 1)
 	keyCh = make([]rune, 0)
