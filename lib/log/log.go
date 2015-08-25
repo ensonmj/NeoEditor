@@ -58,6 +58,10 @@ func NewDefaultLogger(lvl level) Logger {
 	return Logger{"stdout": &Filter{lvl, NewConsoleLogWriter()}}
 }
 
+func NewFileLogger(lvl level, fPath string) Logger {
+	return Logger{"file": &Filter{lvl, NewFileLogWriter(fPath)}}
+}
+
 func (log Logger) AddFilter(name string, lvl level, writer LogWriter) Logger {
 	log[name] = &Filter{lvl, writer}
 	return log

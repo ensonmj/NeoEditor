@@ -13,9 +13,8 @@ var keyCh []rune
 func main() {
 	flag.Parse()
 
-	lg := log.NewDefaultLogger(log.FINEST)
+	lg := log.NewFileLogger(log.FINEST, "./ne.log")
 	defer lg.Close()
-	lg.AddFilter("file", log.FINEST, log.NewFileLogWriter("./ne.log"))
 	lg.Finest("NeoEditor started")
 	defer lg.Finest("NeoEditor quit")
 
