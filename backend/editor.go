@@ -1,25 +1,27 @@
 package neoeditor
 
 import (
-	"github.com/ensonmj/NeoEditor/lib/log"
 	"os"
+
+	"github.com/ensonmj/NeoEditor/lib/log"
+	"github.com/ensonmj/NeoEditor/lib/plugin"
 )
 
 type Editor struct {
+	pm        plugin.PluginManager
 	tabs      []*Tab
 	activeTab int
 	bufs      []*Buffer
 	activeBuf int
-	plugins   []Plugin
 	chars     chan rune
-}
-
-type Plugin interface {
 }
 
 func NewEditor() *Editor {
 	log.AddFilter("backend", log.DEBUG, log.NewFileLogWriter("./neoeditor.log"))
-	ed := &Editor{bufs: make([]*Buffer, 0, 1), chars: make(chan rune, 32)}
+	ed := &Editor{pm: make(plugin.PluginManager, 1), chars: make(chan rune, 32)}
+	xui := &plugin.DummyPlugin{}
+	xui.Register(ed.pm)
+
 	buf, _ := NewBuffer("buf.txt", os.O_RDWR|os.O_CREATE, 0644)
 	ed.bufs = append(ed.bufs, buf)
 	go func() {

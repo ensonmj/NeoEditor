@@ -2,9 +2,11 @@ package main
 
 import (
 	"flag"
+	"time"
 
 	ned "github.com/ensonmj/NeoEditor/backend"
 	"github.com/ensonmj/NeoEditor/lib/log"
+	"github.com/ensonmj/NeoEditor/lib/plugin"
 	"github.com/nsf/termbox-go"
 )
 
@@ -88,8 +90,6 @@ func main() {
 	shutdown = make(chan bool, 1)
 	keyCh = make([]rune, 0)
 
-	ed := ned.NewEditor()
-
 	if err := termbox.Init(); err != nil {
 		panic(err)
 	}
@@ -102,6 +102,9 @@ func main() {
 		}
 	}()
 
+	tui := &TUI{}
+	tickChan := time.NewTicker(1 * time.Millisecond).C
+	ed := ned.NewEditor()
 	for {
 		select {
 		case ev := <-evchan:
@@ -113,18 +116,11 @@ func main() {
 			}
 		case <-shutdown:
 			return
+		case <-tickChan:
+			pi := &plugin.PluginInput{}
+			tui.Handle(pi)
 		}
 	}
-}
-
-func redraw() {
-	const colordef = termbox.ColorDefault
-	termbox.Clear(colordef, colordef)
-
-	for i, r := range keyCh {
-		termbox.SetCell(i, 0, r, termbox.ColorWhite, colordef)
-	}
-	termbox.Flush()
 }
 
 func handleInput(ed *ned.Editor, ev termbox.Event) {
@@ -152,5 +148,4 @@ func handleInput(ed *ned.Editor, ev termbox.Event) {
 	ed.HandleInput(kp)
 
 	keyCh = append(keyCh, ev.Ch)
-	redraw()
 }

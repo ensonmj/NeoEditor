@@ -7,9 +7,11 @@ const chunkSize = 256 * 1024
 
 // TODO: store content line by line, and support to highlight diff
 type Buffer struct {
+	view    *View
 	scratch bool
 	fPath   string
 	file    *os.File
+	edits   []*Edit
 	data    []rune
 }
 
@@ -25,6 +27,10 @@ func NewBuffer(fPath string, flag int, perm os.FileMode) (*Buffer, error) {
 
 func (b *Buffer) String() string {
 	return b.fPath + ":" + string(b.data)
+}
+
+func (b *Buffer) Contents() []rune {
+	return b.data
 }
 
 // Not allowed null in file
