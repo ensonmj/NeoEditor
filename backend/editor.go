@@ -3,9 +3,17 @@ package neoeditor
 import (
 	"os"
 
+	"github.com/ensonmj/NeoEditor/backend/events"
+	"github.com/ensonmj/NeoEditor/lib/key"
 	"github.com/ensonmj/NeoEditor/lib/log"
 	"github.com/ensonmj/NeoEditor/lib/plugin"
 )
+
+var Ned *Editor
+
+func init() {
+	Ned = NewEditor()
+}
 
 type Editor struct {
 	pm        plugin.PluginManager
@@ -14,16 +22,19 @@ type Editor struct {
 	bufs      []*Buffer
 	activeBuf int
 	chars     chan rune
+	events    map[string]events.Event
 }
 
 func NewEditor() *Editor {
-	log.AddFilter("backend", log.DEBUG, log.NewFileLogWriter("./neoeditor.log"))
+	log.AddFilter("file", log.DEBUG, log.NewFileLogWriter("./ned.log"))
 	ed := &Editor{pm: make(plugin.PluginManager, 1), chars: make(chan rune, 32)}
 	xui := &plugin.DummyPlugin{}
 	xui.Register(ed.pm)
 
 	buf, _ := NewBuffer("buf.txt", os.O_RDWR|os.O_CREATE, 0644)
 	ed.bufs = append(ed.bufs, buf)
+	ed.events = make(map[string]events.Event)
+	ed.events["bufferChanged"] = &events.BufferChanged{}
 	go func() {
 		for {
 			select {
@@ -31,6 +42,8 @@ func NewEditor() *Editor {
 				chars := make([]rune, 0, 1)
 				chars = append(chars, char)
 				ed.bufs[ed.activeBuf].Append(chars)
+
+				ed.events["bufferChanged"].Notify(ed.bufs[ed.activeBuf].Contents)
 			}
 		}
 	}()
@@ -38,7 +51,12 @@ func NewEditor() *Editor {
 	return ed
 }
 
-func (ed *Editor) HandleInput(kp KeyPress) {
+func (ed *Editor) RegisterListener(event string, l events.Listener) {
+	ed.events[event].AddListener(l)
+
+}
+
+func (ed *Editor) HandleInput(kp key.KeyPress) {
 	log.Debug("receive key press:%v", kp)
 	if kp.Ctrl && kp.Key == 's' {
 		log.Debug("save buffer:%s", ed.bufs[ed.activeBuf])

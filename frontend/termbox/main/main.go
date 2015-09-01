@@ -2,18 +2,15 @@ package main
 
 import (
 	"flag"
-	"time"
 
-	ned "github.com/ensonmj/NeoEditor/backend"
+	"github.com/ensonmj/NeoEditor/lib/key"
 	"github.com/ensonmj/NeoEditor/lib/log"
-	"github.com/ensonmj/NeoEditor/lib/plugin"
 	"github.com/nsf/termbox-go"
 )
 
 var shutdown chan bool
-var keyCh []rune
 var (
-	lut = map[termbox.Key]ned.KeyPress{
+	lut = map[termbox.Key]key.KeyPress{
 		// Omission of these are intentional due to map collisions
 		//		termbox.KeyCtrlTilde:      keys.KeyPress{Ctrl: true, Key: '~'},
 		//		termbox.KeyCtrlBackslash:  keys.KeyPress{Ctrl: true, Key: '\\'},
@@ -83,12 +80,9 @@ var (
 func main() {
 	flag.Parse()
 
-	log.AddFilter("termbox", log.DEBUG, log.NewFileLogWriter("./ned.log"))
 	log.Debug("NeoEditor started")
-	defer log.Debug("NeoEditor quit")
 
 	shutdown = make(chan bool, 1)
-	keyCh = make([]rune, 0)
 
 	if err := termbox.Init(); err != nil {
 		panic(err)
@@ -103,8 +97,8 @@ func main() {
 	}()
 
 	tui := &TUI{}
-	tickChan := time.NewTicker(1 * time.Millisecond).C
-	ed := ned.NewEditor()
+	tui.Init()
+	//tickChan := time.NewTicker(1 * time.Millisecond).C
 	for {
 		select {
 		case ev := <-evchan:
@@ -112,26 +106,26 @@ func main() {
 			case termbox.EventError:
 				return
 			case termbox.EventKey:
-				handleInput(ed, ev)
+				handleInput(tui, ev)
 			}
 		case <-shutdown:
+			log.Debug("NeoEditor quit")
 			return
-		case <-tickChan:
-			pi := &plugin.PluginInput{}
-			tui.Handle(pi)
+			//case <-tickChan:
+			//tui.Render()
 		}
 	}
 }
 
-func handleInput(ed *ned.Editor, ev termbox.Event) {
+func handleInput(ui *TUI, ev termbox.Event) {
 	if ev.Key == termbox.KeyCtrlQ {
 		shutdown <- true
 		return
 	}
 
-	var kp ned.KeyPress
+	var kp key.KeyPress
 	if ev.Ch != 0 {
-		kp.Key = ned.Key(ev.Ch)
+		kp.Key = key.Key(ev.Ch)
 		kp.Text = string(ev.Ch)
 	} else {
 		var ok bool
@@ -139,13 +133,11 @@ func handleInput(ed *ned.Editor, ev termbox.Event) {
 		kp, ok = lut[ev.Key]
 		log.Debug("key press:%v, ok:%v", kp, ok)
 		if !ok {
-			kp.Key = ned.Key(ev.Ch)
+			kp.Key = key.Key(ev.Ch)
 		}
 		kp.Text = string(ev.Ch)
 	}
 
 	log.Debug("key press:%v", kp)
-	ed.HandleInput(kp)
-
-	keyCh = append(keyCh, ev.Ch)
+	ui.HandleInput(kp)
 }

@@ -1,8 +1,11 @@
 package plugin
 
+import "github.com/ensonmj/NeoEditor/lib/key"
+
 type PluginManager map[string]Plugin
 
 type PluginInput struct {
+	Kp    key.KeyPress
 	Text  [][]rune
 	Chars []rune
 }

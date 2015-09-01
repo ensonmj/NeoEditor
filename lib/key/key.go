@@ -1,4 +1,4 @@
-package neoeditor
+package key
 
 type Key rune
 

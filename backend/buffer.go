@@ -29,8 +29,10 @@ func (b *Buffer) String() string {
 	return b.fPath + ":" + string(b.data)
 }
 
-func (b *Buffer) Contents() []rune {
-	return b.data
+func (b *Buffer) Contents() [][]rune {
+	contents := make([][]rune, 1)
+	contents[0] = b.data
+	return contents
 }
 
 // Not allowed null in file
