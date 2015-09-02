@@ -34,7 +34,7 @@ func NewEditor() *Editor {
 	buf, _ := NewBuffer("buf.txt", os.O_RDWR|os.O_CREATE, 0644)
 	ed.bufs = append(ed.bufs, buf)
 	ed.events = make(map[string]events.Event)
-	ed.events["bufferChanged"] = &events.BufferChanged{}
+	ed.RegisterPublisher("bufferChanged", &events.BufferChanged{})
 	go func() {
 		for {
 			select {
@@ -43,7 +43,7 @@ func NewEditor() *Editor {
 				chars = append(chars, char)
 				ed.bufs[ed.activeBuf].Append(chars)
 
-				ed.events["bufferChanged"].Notify(ed.bufs[ed.activeBuf].Contents)
+				ed.NotifyEvent("bufferChanged", ed.bufs[ed.activeBuf].Contents())
 			}
 		}
 	}()
@@ -51,9 +51,17 @@ func NewEditor() *Editor {
 	return ed
 }
 
+func (ed *Editor) RegisterPublisher(event string, pub events.Event) {
+	ed.events[event] = pub
+}
+
 func (ed *Editor) RegisterListener(event string, l events.Listener) {
 	ed.events[event].AddListener(l)
 
+}
+
+func (ed *Editor) NotifyEvent(event string, args ...interface{}) {
+	ed.events[event].Notify(args...)
 }
 
 func (ed *Editor) HandleInput(kp key.KeyPress) {

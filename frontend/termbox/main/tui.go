@@ -3,7 +3,7 @@ package main
 import (
 	ned "github.com/ensonmj/NeoEditor/backend"
 	"github.com/ensonmj/NeoEditor/lib/key"
-	"github.com/gpmgo/gopm/modules/log"
+	"github.com/ensonmj/NeoEditor/lib/log"
 	"github.com/nsf/termbox-go"
 )
 
@@ -29,6 +29,10 @@ func (ui *TUI) Render() {
 
 func (ui *TUI) OnEvent(args ...interface{}) {
 	go func(args ...interface{}) {
+		log.Debug("TUI get event:%#v", args)
+		if args == nil {
+			return
+		}
 		if text, ok := args[0].([][]rune); ok {
 			fg, bg := termbox.ColorDefault, termbox.ColorDefault
 			termbox.Clear(fg, bg)
@@ -40,5 +44,5 @@ func (ui *TUI) OnEvent(args ...interface{}) {
 			}
 			termbox.Flush()
 		}
-	}()
+	}(args...)
 }

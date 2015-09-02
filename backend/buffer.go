@@ -32,6 +32,7 @@ func (b *Buffer) String() string {
 func (b *Buffer) Contents() [][]rune {
 	contents := make([][]rune, 1)
 	contents[0] = b.data
+	log.Debug("buffer contents:%#v", contents)
 	return contents
 }
 
