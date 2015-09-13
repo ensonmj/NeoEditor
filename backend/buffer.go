@@ -1,9 +1,10 @@
 package neoeditor
 
 import (
+	"os"
+
 	"github.com/ensonmj/NeoEditor/lib/codec"
 	"github.com/ensonmj/NeoEditor/lib/log"
-	"os"
 )
 
 const chunkSize = 256 * 1024

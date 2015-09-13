@@ -1,7 +1,7 @@
 package neoeditor
 
 import (
-	//"fmt"
+	"fmt"
 	"os"
 	"time"
 
@@ -49,13 +49,6 @@ func NewEditor() (*Editor, error) {
 	}
 	rep.Bind("tcp://*:5198")
 
-	// the publisher need to sleep a litter before starting to publish
-	pub, err := zmq.NewSocket(zmq.PUB)
-	if err != nil {
-		return nil, err
-	}
-	pub.Bind("tcp://*:5199")
-
 	// monitor request
 	go func() {
 		for {
@@ -69,14 +62,21 @@ func NewEditor() (*Editor, error) {
 		}
 	}()
 
+	// the publisher need to sleep a litter before starting to publish
+	pub, err := zmq.NewSocket(zmq.PUB)
+	if err != nil {
+		return nil, err
+	}
+	//pub.Bind("tcp://*:5199")
+	pub.Bind("inproc://notification")
+
 	// broadcast notification
 	go func() {
 		for {
 			ev := <-ed.events
 
 			// env.Method as topic, and env.Arguments as content
-			//topic := fmt.Sprintf("%s ", ev.Method)
-			topic := "1 "
+			topic := fmt.Sprintf("%s ", ev.Method)
 			pub.Send(topic, zmq.SNDMORE)
 			msg, _ := codec.Serialize(ev.Arguments)
 			log.Debug("broadcast event:%s%s", topic, string(msg))

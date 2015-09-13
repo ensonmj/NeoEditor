@@ -137,9 +137,10 @@ func main() {
 	req.Connect("tcp://localhost:5198")
 
 	sub, _ := zmq.NewSocket(zmq.SUB)
-	sub.Connect("tcp://localhost:5199")
-	//sub.SetSubscribe("updateView ")
-	sub.SetSubscribe("1 ")
+	//sub.Connect("tcp://localhost:5199")
+	sub.Connect("inproc://notification")
+	sub.SetSubscribe("updateView")
+	//sub.SetSubscribe("")
 
 	// Assuming that all extra arguments are files
 	if files := flag.Args(); len(files) > 0 {
@@ -155,6 +156,12 @@ func main() {
 			topic, _ := sub.Recv(0)
 			msg, _ := sub.Recv(0)
 			log.Debug("subscriber got msg:%s%s", topic, msg)
+			var text [][]rune
+			if err := codec.Deserialize([]byte(msg), &text); err != nil {
+				log.Critical(err)
+				continue
+			}
+			updateView(text)
 		}
 	}()
 
@@ -202,6 +209,18 @@ func handleInput(req *zmq.Socket, ev termbox.Event) {
 
 	log.Debug("key press:%v", kp)
 	sendCommand(kp)
+}
+
+func updateView(text [][]rune) {
+	fg, bg := termbox.ColorDefault, termbox.ColorDefault
+	termbox.Clear(fg, bg)
+
+	for row, line := range text {
+		for col, r := range line {
+			termbox.SetCell(col, row, r, termbox.ColorWhite, termbox.ColorDefault)
+		}
+	}
+	termbox.Flush()
 }
 
 // Command
