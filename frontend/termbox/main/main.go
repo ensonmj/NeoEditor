@@ -2,16 +2,25 @@ package main
 
 import (
 	"flag"
+	"net/http"
+	_ "net/http/pprof"
 
-	ned "github.com/ensonmj/NeoEditor/backend"
+	"github.com/ensonmj/NeoEditor/backend"
+	"github.com/ensonmj/NeoEditor/lib/codec"
+	"github.com/ensonmj/NeoEditor/lib/key"
 	"github.com/ensonmj/NeoEditor/lib/log"
 	"github.com/nsf/termbox-go"
+	zmq "github.com/pebbe/zmq4"
+)
+
+const (
+	chanBufLen = 16
 )
 
 var shutdown chan bool
-var keyCh []rune
+var cmdChan chan string
 var (
-	lut = map[termbox.Key]ned.KeyPress{
+	lut = map[termbox.Key]key.KeyPress{
 		// Omission of these are intentional due to map collisions
 		//		termbox.KeyCtrlTilde:      keys.KeyPress{Ctrl: true, Key: '~'},
 		//		termbox.KeyCtrlBackslash:  keys.KeyPress{Ctrl: true, Key: '\\'},
@@ -78,64 +87,114 @@ var (
 	}
 )
 
+// Command line flags
+var (
+	showDebug = flag.Bool("debug", false, "Display debug log")
+)
+
 func main() {
+	//log.AddFilter("console", log.DEBUG, log.NewConsoleLogWriter())
+	log.Debug("NeoEditor started")
+	defer log.Close()
+
+	// For profile
+	go func() {
+		http.ListenAndServe("127.0.0.1:5199", nil)
+	}()
+
+	defer func() {
+		termbox.Close()
+		if err := recover(); err != nil {
+			log.Critical(err)
+			log.Close()
+			panic(err)
+		}
+	}()
+
 	flag.Parse()
 
-	log.AddFilter("termbox", log.DEBUG, log.NewFileLogWriter("./ned.log"))
-	log.Debug("NeoEditor started")
-	defer log.Debug("NeoEditor quit")
+	if _, err := neoeditor.NewEditor(); err != nil {
+		log.Critical("create editor error:%s", err)
+		panic(err)
+	}
 
 	shutdown = make(chan bool, 1)
-	keyCh = make([]rune, 0)
-
-	ed := ned.NewEditor()
+	cmdChan = make(chan string, chanBufLen)
 
 	if err := termbox.Init(); err != nil {
 		panic(err)
 	}
 	defer termbox.Close()
 
-	evchan := make(chan termbox.Event, 32)
+	evchan := make(chan termbox.Event, chanBufLen)
 	go func() {
 		for {
 			evchan <- termbox.PollEvent()
 		}
 	}()
 
+	req, _ := zmq.NewSocket(zmq.PUSH)
+	req.Connect("tcp://localhost:5198")
+
+	sub, _ := zmq.NewSocket(zmq.SUB)
+	//sub.Connect("tcp://localhost:5199")
+	sub.Connect("inproc://notification")
+	sub.SetSubscribe("updateView")
+	//sub.SetSubscribe("")
+
+	// Assuming that all extra arguments are files
+	if files := flag.Args(); len(files) > 0 {
+		for _, file := range files {
+			openFile(file)
+		}
+	}
+
+	// Receive notification
+	go func() {
+		log.Debug("start receiving notification")
+		for {
+			topic, _ := sub.Recv(0)
+			msg, _ := sub.Recv(0)
+			log.Debug("subscriber got msg:%s%s", topic, msg)
+			var text [][]rune
+			if err := codec.Deserialize([]byte(msg), &text); err != nil {
+				log.Critical(err)
+				continue
+			}
+			updateView(text)
+		}
+	}()
+
+	//tickChan := time.NewTicker(1 * time.Millisecond).C
 	for {
 		select {
 		case ev := <-evchan:
 			switch ev.Type {
 			case termbox.EventError:
+				log.Critical("key event error:%v", ev)
 				return
 			case termbox.EventKey:
-				handleInput(ed, ev)
+				handleInput(req, ev)
 			}
+		case cmd := <-cmdChan:
+			req.Send(cmd, zmq.DONTWAIT)
 		case <-shutdown:
+			log.Debug("NeoEditor quit")
 			return
+			//case <-tickChan:
 		}
 	}
 }
 
-func redraw() {
-	const colordef = termbox.ColorDefault
-	termbox.Clear(colordef, colordef)
-
-	for i, r := range keyCh {
-		termbox.SetCell(i, 0, r, termbox.ColorWhite, colordef)
-	}
-	termbox.Flush()
-}
-
-func handleInput(ed *ned.Editor, ev termbox.Event) {
+func handleInput(req *zmq.Socket, ev termbox.Event) {
 	if ev.Key == termbox.KeyCtrlQ {
 		shutdown <- true
 		return
 	}
 
-	var kp ned.KeyPress
+	var kp key.KeyPress
 	if ev.Ch != 0 {
-		kp.Key = ned.Key(ev.Ch)
+		kp.Key = key.Key(ev.Ch)
 		kp.Text = string(ev.Ch)
 	} else {
 		var ok bool
@@ -143,14 +202,35 @@ func handleInput(ed *ned.Editor, ev termbox.Event) {
 		kp, ok = lut[ev.Key]
 		log.Debug("key press:%v, ok:%v", kp, ok)
 		if !ok {
-			kp.Key = ned.Key(ev.Ch)
+			kp.Key = key.Key(ev.Ch)
 		}
 		kp.Text = string(ev.Ch)
 	}
 
 	log.Debug("key press:%v", kp)
-	ed.HandleInput(kp)
+	sendCommand(kp)
+}
 
-	keyCh = append(keyCh, ev.Ch)
-	redraw()
+func updateView(text [][]rune) {
+	fg, bg := termbox.ColorDefault, termbox.ColorDefault
+	termbox.Clear(fg, bg)
+
+	for row, line := range text {
+		for col, r := range line {
+			termbox.SetCell(col, row, r, termbox.ColorWhite, termbox.ColorDefault)
+		}
+	}
+	termbox.Flush()
+}
+
+// Command
+func sendCommand(v interface{}) {
+	cmd := codec.Envelope{Method: "KeyPress", Arguments: v}
+	msg, _ := codec.Serialize(cmd)
+	log.Debug("send cmd:%s", msg)
+	cmdChan <- string(msg)
+}
+
+func openFile(fPath string) {
+	sendCommand(map[string]string{"fPath": fPath})
 }

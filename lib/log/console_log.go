@@ -13,7 +13,7 @@ type ConsoleLogWriter struct {
 
 func NewConsoleLogWriter() *ConsoleLogWriter {
 	w := &ConsoleLogWriter{
-		format: "[%T %D][%L][%s]%M",
+		format: "[%T %D][%L][%s] %M",
 		rec:    make(chan *LogRecord, LogBufLen),
 	}
 	go func() {

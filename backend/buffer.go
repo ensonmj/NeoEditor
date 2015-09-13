@@ -1,15 +1,21 @@
 package neoeditor
 
-import "os"
-import "github.com/ensonmj/NeoEditor/lib/log"
+import (
+	"os"
+
+	"github.com/ensonmj/NeoEditor/lib/codec"
+	"github.com/ensonmj/NeoEditor/lib/log"
+)
 
 const chunkSize = 256 * 1024
 
 // TODO: store content line by line, and support to highlight diff
 type Buffer struct {
+	view    *View
 	scratch bool
 	fPath   string
 	file    *os.File
+	edits   []*Edit
 	data    []rune
 }
 
@@ -27,7 +33,13 @@ func (b *Buffer) String() string {
 	return b.fPath + ":" + string(b.data)
 }
 
-// Not allowed null in file
+func (b *Buffer) Contents() [][]rune {
+	contents := make([][]rune, 1)
+	contents[0] = b.data
+	log.Debug("buffer contents:%#v", contents)
+	return contents
+}
+
 func (b *Buffer) Insert(index int, chars []rune) error {
 	log.Debug("Insert in:%d,%s", index, string(chars))
 	req := len(chars) + len(b.data)
@@ -78,3 +90,50 @@ func (b *Buffer) Close() {
 	b.file.Write([]byte(string(b.data)))
 	b.file.Close()
 }
+
+// Commands
+type CmdNewBuffer struct {
+	fPath string
+	flag  int
+	perm  os.FileMode
+}
+
+func (c CmdNewBuffer) Run(ed *Editor, args string) error {
+	codec.Deserialize([]byte(args), c)
+	buf, err := NewBuffer(c.fPath, c.flag, c.perm)
+	if err != nil {
+		return err
+	}
+	ed.bufs = append(ed.bufs, buf)
+	ed.activeBuf = len(ed.bufs) - 1
+
+	return nil
+}
+
+type CmdAppendRune struct {
+	data string
+}
+
+func (c CmdAppendRune) Run(ed *Editor, args string) error {
+	codec.Deserialize([]byte(args), c)
+	ed.bufs[ed.activeBuf].Append([]rune(c.data))
+
+	ed.PubEvent("updateView", ed.bufs[ed.activeBuf].Contents())
+
+	return nil
+}
+
+// Events
+//type BufferChanged struct {
+//listeners []Listener
+//}
+
+//func (bc *BufferChanged) AddListener(l Listener) {
+//bc.listeners = append(bc.listeners, l)
+//}
+
+//func (bc *BufferChanged) Notify(args ...interface{}) {
+//for _, l := range bc.listeners {
+//l.OnEvent("bufferChanged", args...)
+//}
+//}

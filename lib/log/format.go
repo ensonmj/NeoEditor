@@ -24,7 +24,7 @@ var formatCache = &formatCacheT{}
 // %s - FileName
 // %M - Message
 // Ignore unknown formats
-// Recomanded: "[%D %T][%L][%S]%M"
+// Recomanded: "[%D %T][%L][%S] %M"
 func formatLogRecord(format string, rec *LogRecord) string {
 	if rec == nil {
 		return "<nil>"
