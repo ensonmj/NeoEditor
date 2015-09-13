@@ -17,13 +17,13 @@ type FileLogWriter struct {
 func NewFileLogWriter(filePath string) *FileLogWriter {
 	w := &FileLogWriter{
 		fPath:  filePath,
-		format: "[%D %T][%L][%s]%M",
+		format: "[%D %T][%L][%s] %M",
 		rec:    make(chan *LogRecord, LogBufLen),
 		header: "==========*** This line is the header of the log ***==========",
 		footer: "==========*** This line is the footer of the log ***==========",
 	}
 
-	fd, err := os.OpenFile(w.fPath, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0600)
+	fd, err := os.OpenFile(w.fPath, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0644)
 	if err != nil {
 		return nil
 	}

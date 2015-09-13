@@ -2,13 +2,23 @@ package main
 
 import (
 	"flag"
+	"net/http"
+	_ "net/http/pprof"
 
+	"github.com/ensonmj/NeoEditor/backend"
+	"github.com/ensonmj/NeoEditor/lib/codec"
 	"github.com/ensonmj/NeoEditor/lib/key"
 	"github.com/ensonmj/NeoEditor/lib/log"
 	"github.com/nsf/termbox-go"
+	zmq "github.com/pebbe/zmq4"
+)
+
+const (
+	chanBufLen = 16
 )
 
 var shutdown chan bool
+var cmdChan chan string
 var (
 	lut = map[termbox.Key]key.KeyPress{
 		// Omission of these are intentional due to map collisions
@@ -77,47 +87,99 @@ var (
 	}
 )
 
+// Command line flags
+var (
+	showDebug = flag.Bool("debug", false, "Display debug log")
+)
+
 func main() {
+	//log.AddFilter("console", log.DEBUG, log.NewConsoleLogWriter())
+	log.Debug("NeoEditor started")
+	defer log.Close()
+
+	// For profile
+	go func() {
+		http.ListenAndServe("127.0.0.1:5199", nil)
+	}()
+
+	defer func() {
+		termbox.Close()
+		if err := recover(); err != nil {
+			log.Critical(err)
+			log.Close()
+			panic(err)
+		}
+	}()
+
 	flag.Parse()
 
-	log.Debug("NeoEditor started")
+	if _, err := neoeditor.NewEditor(); err != nil {
+		log.Critical("create editor error:%s", err)
+		panic(err)
+	}
 
 	shutdown = make(chan bool, 1)
+	cmdChan = make(chan string, chanBufLen)
 
 	if err := termbox.Init(); err != nil {
 		panic(err)
 	}
 	defer termbox.Close()
 
-	evchan := make(chan termbox.Event, 32)
+	evchan := make(chan termbox.Event, chanBufLen)
 	go func() {
 		for {
 			evchan <- termbox.PollEvent()
 		}
 	}()
 
-	tui := &TUI{}
-	tui.Init()
+	req, _ := zmq.NewSocket(zmq.PUSH)
+	req.Connect("tcp://localhost:5198")
+
+	sub, _ := zmq.NewSocket(zmq.SUB)
+	sub.Connect("tcp://localhost:5199")
+	//sub.SetSubscribe("updateView ")
+	sub.SetSubscribe("1 ")
+
+	// Assuming that all extra arguments are files
+	if files := flag.Args(); len(files) > 0 {
+		for _, file := range files {
+			openFile(file)
+		}
+	}
+
+	// Receive notification
+	go func() {
+		log.Debug("start receiving notification")
+		for {
+			topic, _ := sub.Recv(0)
+			msg, _ := sub.Recv(0)
+			log.Debug("subscriber got msg:%s%s", topic, msg)
+		}
+	}()
+
 	//tickChan := time.NewTicker(1 * time.Millisecond).C
 	for {
 		select {
 		case ev := <-evchan:
 			switch ev.Type {
 			case termbox.EventError:
+				log.Critical("key event error:%v", ev)
 				return
 			case termbox.EventKey:
-				handleInput(tui, ev)
+				handleInput(req, ev)
 			}
+		case cmd := <-cmdChan:
+			req.Send(cmd, zmq.DONTWAIT)
 		case <-shutdown:
 			log.Debug("NeoEditor quit")
 			return
 			//case <-tickChan:
-			//tui.Render()
 		}
 	}
 }
 
-func handleInput(ui *TUI, ev termbox.Event) {
+func handleInput(req *zmq.Socket, ev termbox.Event) {
 	if ev.Key == termbox.KeyCtrlQ {
 		shutdown <- true
 		return
@@ -139,5 +201,17 @@ func handleInput(ui *TUI, ev termbox.Event) {
 	}
 
 	log.Debug("key press:%v", kp)
-	ui.HandleInput(kp)
+	sendCommand(kp)
+}
+
+// Command
+func sendCommand(v interface{}) {
+	cmd := codec.Envelope{Method: "KeyPress", Arguments: v}
+	msg, _ := codec.Serialize(cmd)
+	log.Debug("send cmd:%s", msg)
+	cmdChan <- string(msg)
+}
+
+func openFile(fPath string) {
+	sendCommand(map[string]string{"fPath": fPath})
 }

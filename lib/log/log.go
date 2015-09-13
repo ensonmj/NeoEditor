@@ -39,7 +39,8 @@ type LogRecord struct {
 }
 
 var (
-	LogBufLen = 32
+	// Make sure log was written before any other goroutines panic
+	LogBufLen = 0
 )
 
 type LogWriter interface {
