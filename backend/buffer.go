@@ -20,6 +20,11 @@ type Buffer struct {
 }
 
 func NewBuffer(fPath string, flag int, perm os.FileMode) (*Buffer, error) {
+	if fPath == "" {
+		log.Debug("create scratch buffer")
+		return &Buffer{scratch: true}, nil
+	}
+
 	fd, err := os.OpenFile(fPath, flag, perm)
 	if err != nil {
 		return nil, err

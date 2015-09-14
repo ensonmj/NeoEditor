@@ -39,7 +39,8 @@ func NewEditor() (*Editor, error) {
 	ed.events = make(chan codec.Envelope, chanBufLen)
 	ed.done = make(chan bool)
 
-	buf, _ := NewBuffer("buf.txt", os.O_RDWR|os.O_CREATE, 0644)
+	// create a scratch buffer
+	buf, _ := NewBuffer("", os.O_RDWR|os.O_CREATE, 0644)
 	ed.bufs = append(ed.bufs, buf)
 	ed.activeBuf = 0
 
