@@ -1,28 +1,33 @@
 package neoeditor
 
 import (
+	"errors"
 	"os"
 
+	"github.com/ensonmj/NeoEditor/iface"
 	"github.com/ensonmj/NeoEditor/lib/codec"
 	"github.com/ensonmj/NeoEditor/lib/log"
 )
 
-const chunkSize = 256 * 1024
+// default size for one line
+const chunkSize = 128
 
 // TODO: store content line by line, and support to highlight diff
 type Buffer struct {
-	view    *View
+	View
 	scratch bool
 	fPath   string
 	file    *os.File
 	edits   []*Edit
-	data    []rune
+	data    [][]rune
 }
 
 func NewBuffer(fPath string, flag int, perm os.FileMode) (*Buffer, error) {
 	if fPath == "" {
 		log.Debug("create scratch buffer")
-		return &Buffer{scratch: true}, nil
+		buffer := &Buffer{scratch: true}
+		buffer.data = append(buffer.data, make([]rune, 0, chunkSize))
+		return buffer, nil
 	}
 
 	fd, err := os.OpenFile(fPath, flag, perm)
@@ -31,41 +36,94 @@ func NewBuffer(fPath string, flag int, perm os.FileMode) (*Buffer, error) {
 	}
 	log.Debug("create new file:%s", fPath)
 
-	return &Buffer{fPath: fPath, file: fd}, nil
+	buffer := &Buffer{fPath: fPath, file: fd}
+	buffer.data = append(buffer.data, make([]rune, 0, chunkSize))
+	return buffer, nil
 }
 
-func (b *Buffer) String() string {
-	return b.fPath + ":" + string(b.data)
-}
+//func (b *Buffer) String() string {
+//return b.fPath + ":" + string(b.data)
+//}
 
 func (b *Buffer) Contents() [][]rune {
-	contents := make([][]rune, 1)
-	contents[0] = b.data
-	log.Debug("buffer contents:%#v", contents)
-	return contents
+	log.Debug("buffer contents:%#v", b.data)
+	return b.data
 }
 
-func (b *Buffer) Insert(index int, chars []rune) error {
-	log.Debug("Insert in:%d,%s", index, string(chars))
-	req := len(chars) + len(b.data)
-	if req > cap(b.data) {
+func (b *Buffer) Insert(chars []rune) error {
+	row, col := b.rCursor, b.cCursor
+	log.Debug("Insert %s in %d,%d", string(chars), row, col)
+	lineStart := 0 // start pos of a batch chars which splited by '\n'
+	for i, c := range chars {
+		if c == '\n' {
+			buf := b.data[row]
+			nextLine := make([]rune, 0, chunkSize)
+			//copy the ramain to next line
+			copy(nextLine, buf[col:])
+			b.data = append(b.data, nextLine)
+
+			// '\n' not saved in the buffer
+			b.data[row], _ = replaceFrom(buf, chars[lineStart:i], col)
+			lineStart = i + 1
+			row++
+			col = 0
+		} else if i == len(chars)-1 {
+			buf := b.data[row]
+			b.data[row], _ = insertIn(buf, chars[lineStart:], col)
+			col = col + len(chars[lineStart:])
+			log.Debug("buffer content:%v", b.data)
+		} else {
+			continue
+		}
+	}
+
+	b.rCursor, b.cCursor = row, col
+
+	return nil
+}
+
+func replaceFrom(orig, chars []rune, index int) ([]rune, error) {
+	if index > len(orig) {
+		return nil, errors.New("gap not allowed in file")
+	}
+
+	req := index + len(chars)
+	if req > cap(orig) {
 		alloc := (req + chunkSize - 1) & ^(chunkSize - 1)
-		n := make([]rune, len(b.data), alloc)
-		copy(n, b.data)
-		b.data = n
+		n := make([]rune, index, alloc)
+		copy(n, orig[0:index]) //chars from index will be overwrite
+		orig = n
+	}
+	copy(orig[index:req], chars)
+
+	orig = orig[:req]
+
+	return orig, nil
+}
+
+func insertIn(orig, chars []rune, index int) ([]rune, error) {
+	if index > len(orig) {
+		return nil, errors.New("gap not allowed in file")
+	}
+
+	req := len(orig) + len(chars)
+	if req > cap(orig) {
+		alloc := (req + chunkSize - 1) & ^(chunkSize - 1)
+		n := make([]rune, len(orig), alloc)
+		copy(n, orig)
+		orig = n
 	}
 
 	// append chars into data
-	if index >= len(b.data) {
-		// not allowed gap in file
-		copy(b.data[len(b.data):req], chars)
+	if index == len(orig) {
+		copy(orig[len(orig):req], chars)
 	} else {
-		copy(b.data[index+len(chars):cap(b.data)], b.data[index:len(b.data)])
-		copy(b.data[index:req], chars)
+		copy(orig[index+len(chars):cap(orig)], orig[index:len(orig)])
+		copy(orig[index:req], chars)
 	}
-	b.data = b.data[:req]
+	orig = orig[:req]
 
-	return nil
+	return orig, nil
 }
 
 func (b *Buffer) UnInsert(index int, chars []rune) error {
@@ -73,26 +131,17 @@ func (b *Buffer) UnInsert(index int, chars []rune) error {
 }
 
 func (b *Buffer) Surround(start, end int, fChars, bChars []rune) error {
-	if err := b.Insert(start, fChars); err != nil {
-		return err
-	}
-
-	index := end + len(fChars)
-	if err := b.Insert(index, bChars); err != nil {
-		return err
-	}
-
 	return nil
 }
 
-func (b *Buffer) Append(chars []rune) error {
-	index := len(b.data)
-	return b.Insert(index, chars)
-}
+/*func (b *Buffer) Append(chars []rune) error {*/
+//index := len(b.data)
+//return b.Insert(index, chars)
+/*}*/
 
 func (b *Buffer) Close() {
 	log.Debug("Close the buffer:%s", b.fPath)
-	b.file.Write([]byte(string(b.data)))
+	//b.file.Write([]byte(string(b.data)))
 	b.file.Close()
 }
 
@@ -115,18 +164,37 @@ func (c CmdNewBuffer) Run(ed *Editor, args string) error {
 	return nil
 }
 
-type CmdAppendRune struct {
+type CmdInsertRune struct {
 	data string
 }
 
-func (c CmdAppendRune) Run(ed *Editor, args string) error {
-	codec.Deserialize([]byte(args), c)
-	ed.bufs[ed.activeBuf].Append([]rune(c.data))
+func (c CmdInsertRune) Run(ed *Editor, args string) error {
+	log.Debug("InsertRune args:%s", args)
+	//codec.Deserialize([]byte(args), c)
+	//log.Debug("after parse:%v", c)
+	ed.bufs[ed.activeBuf].Insert([]rune(args))
 
-	ed.PubEvent("updateView", ed.bufs[ed.activeBuf].Contents())
+	var v iface.View
+	v.Contents = ed.bufs[ed.activeBuf].Contents()
+	log.Debug("View:%v", v)
+
+	ed.PubEvent("updateView", v)
 
 	return nil
 }
+
+//type CmdAppendRune struct {
+//data string
+//}
+
+//func (c CmdAppendRune) Run(ed *Editor, args string) error {
+//codec.Deserialize([]byte(args), c)
+//ed.bufs[ed.activeBuf].Append([]rune(c.data))
+
+//ed.PubEvent("updateView", ed.bufs[ed.activeBuf].Contents())
+
+//return nil
+//}
 
 // Events
 //type BufferChanged struct {

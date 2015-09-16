@@ -44,7 +44,13 @@ func (ed *Editor) handleKeyPress(kp key.KeyPress) {
 	}
 
 	// parse keypress
+	var input string
+	if kp.Key != 0 {
+		input = string(rune(kp.Key))
+	} else {
+		input = kp.Text
+	}
 
-	ed.bufs[ed.activeBuf].Append([]rune(kp.Text))
-	ed.PubEvent("updateView", ed.bufs[ed.activeBuf].Contents())
+	var cmd CmdInsertRune
+	cmd.Run(ed, input)
 }
