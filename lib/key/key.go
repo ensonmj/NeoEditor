@@ -136,6 +136,6 @@ func (k Key) String() string {
 // use the Text property for this purpose.
 type KeyPress struct {
 	Text                    string // the text representation of the key
-	Key                     Key    // the code for the key that was pressed
+	Key                     Key    // the unicode for the key that was pressed
 	Shift, Super, Alt, Ctrl bool   // true if modifier key was pressed
 }

@@ -14,7 +14,7 @@ const chunkSize = 128
 
 // TODO: store content line by line, and support to highlight diff
 type Buffer struct {
-	View
+	iface.View
 	scratch bool
 	fPath   string
 	file    *os.File
@@ -51,7 +51,7 @@ func (b *Buffer) Contents() [][]rune {
 }
 
 func (b *Buffer) Insert(chars []rune) error {
-	row, col := b.rCursor, b.cCursor
+	row, col := b.RCursor, b.CCursor
 	log.Debug("Insert %s in %d,%d", string(chars), row, col)
 	lineStart := 0 // start pos of a batch chars which splited by '\n'
 	for i, c := range chars {
@@ -77,7 +77,11 @@ func (b *Buffer) Insert(chars []rune) error {
 		}
 	}
 
-	b.rCursor, b.cCursor = row, col
+	b.RCursor, b.CCursor = row, col
+
+	// TODO: calc cursor position
+	b.XCursor, b.YCursor = b.CCursor, b.RCursor
+	b.View.Contents = b.data
 
 	return nil
 }
@@ -134,11 +138,6 @@ func (b *Buffer) Surround(start, end int, fChars, bChars []rune) error {
 	return nil
 }
 
-/*func (b *Buffer) Append(chars []rune) error {*/
-//index := len(b.data)
-//return b.Insert(index, chars)
-/*}*/
-
 func (b *Buffer) Close() {
 	log.Debug("Close the buffer:%s", b.fPath)
 	//b.file.Write([]byte(string(b.data)))
@@ -168,45 +167,49 @@ type CmdInsertRune struct {
 	data string
 }
 
-func (c CmdInsertRune) Run(ed *Editor, args string) error {
-	log.Debug("InsertRune args:%s", args)
+func (c CmdInsertRune) Run(ed *Editor) error {
+	log.Debug("InsertRune data:%s", c.data)
 	//codec.Deserialize([]byte(args), c)
 	//log.Debug("after parse:%v", c)
-	ed.bufs[ed.activeBuf].Insert([]rune(args))
+	ed.bufs[ed.activeBuf].Insert([]rune(c.data))
 
-	var v iface.View
-	v.Contents = ed.bufs[ed.activeBuf].Contents()
+	v := ed.bufs[ed.activeBuf].View
 	log.Debug("View:%v", v)
-
 	ed.PubEvent("updateView", v)
 
 	return nil
 }
 
-//type CmdAppendRune struct {
-//data string
-//}
+type CursorDirection int
 
-//func (c CmdAppendRune) Run(ed *Editor, args string) error {
-//codec.Deserialize([]byte(args), c)
-//ed.bufs[ed.activeBuf].Append([]rune(c.data))
+const (
+	CLeft CursorDirection = iota
+	CUp
+	CRight
+	CDown
+)
 
-//ed.PubEvent("updateView", ed.bufs[ed.activeBuf].Contents())
+type CmdMoveCursor struct {
+	Direction CursorDirection
+	Repeat    int
+}
 
-//return nil
-//}
+func (c CmdMoveCursor) Run(ed *Editor) error {
+	v := &ed.bufs[ed.activeBuf].View
+	switch c.Direction {
+	case CLeft:
+		v.CCursor -= c.Repeat
+	case CUp:
+		v.RCursor -= c.Repeat
+	case CRight:
+		v.CCursor += c.Repeat
+	case CDown:
+		v.RCursor += c.Repeat
+	}
 
-// Events
-//type BufferChanged struct {
-//listeners []Listener
-//}
+	v.XCursor, v.YCursor = v.CCursor, v.RCursor
+	log.Debug("View:%v", v)
+	ed.PubEvent("updateView", v)
 
-//func (bc *BufferChanged) AddListener(l Listener) {
-//bc.listeners = append(bc.listeners, l)
-//}
-
-//func (bc *BufferChanged) Notify(args ...interface{}) {
-//for _, l := range bc.listeners {
-//l.OnEvent("bufferChanged", args...)
-//}
-//}
+	return nil
+}

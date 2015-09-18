@@ -203,6 +203,7 @@ func handleInput(req *zmq.Socket, ev termbox.Event) {
 
 	var kp key.KeyPress
 	if ev.Ch != 0 {
+		kp.Key = key.Key(ev.Ch)
 		kp.Text = string(ev.Ch)
 	} else {
 		var ok bool
@@ -212,6 +213,7 @@ func handleInput(req *zmq.Socket, ev termbox.Event) {
 		if !ok {
 			kp.Key = key.Key(ev.Ch)
 		}
+		kp.Text = string(kp.Key)
 	}
 
 	log.Debug("key press:%v", kp)
@@ -224,12 +226,14 @@ func handleResize(width, height int) {
 
 func updateView(v iface.View) {
 	log.Debug("View:%v", v)
-	fg, bg := termbox.ColorDefault, termbox.ColorDefault
+	fg, bg := termbox.ColorWhite, termbox.ColorBlack
 	termbox.Clear(fg, bg)
 
 	text := v.Contents
 	x, y := 0, 0
+	cursorOnText := false
 	for _, line := range text {
+		fg, bg := termbox.ColorWhite, termbox.ColorBlack
 		for col, r := range line {
 			if col < ui.width {
 				x = col
@@ -238,9 +242,20 @@ func updateView(v iface.View) {
 				x = col - ui.width
 				y++
 			}
-			termbox.SetCell(x, y, r, termbox.ColorWhite, termbox.ColorDefault)
+			if x == v.XCursor && y == v.YCursor {
+				// block style cursor
+				fg = fg | termbox.AttrReverse
+				cursorOnText = true
+			}
+			termbox.SetCell(x, y, r, fg, bg)
 		}
 		y++
+	}
+
+	if !cursorOnText {
+		// block style cursor
+		fg = fg | termbox.AttrReverse
+		termbox.SetCell(v.XCursor, v.YCursor, ' ', fg, bg)
 	}
 	termbox.Flush()
 }

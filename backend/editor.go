@@ -15,11 +15,33 @@ const (
 	chanBufLen = 16
 )
 
+type Mode int
+
+const (
+	Normal Mode = iota
+	Insert
+	Visual
+)
+
+func (m Mode) String() string {
+	switch m {
+	case Normal:
+		return "Normal"
+	case Insert:
+		return "Insert"
+	case Visual:
+		return "Visual"
+	default:
+		return "Unknown"
+	}
+}
+
 type Editor struct {
 	//cmds      chan string
 	events            chan codec.Envelope
 	done              chan bool
 	pm                plugin.PluginManager
+	mode              Mode
 	tabs              []*Tab
 	activeTab         int
 	bufs              []*Buffer
@@ -29,7 +51,7 @@ type Editor struct {
 
 func NewEditor() (*Editor, error) {
 	log.AddFilter("file", log.DEBUG, log.NewFileLogWriter("./ned.log"))
-	ed := &Editor{pm: make(plugin.PluginManager, 1)}
+	ed := &Editor{mode: Normal, pm: make(plugin.PluginManager, 1)}
 	xui := &plugin.DummyPlugin{}
 	xui.Register(ed.pm)
 

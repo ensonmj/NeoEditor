@@ -44,13 +44,41 @@ func (ed *Editor) handleKeyPress(kp key.KeyPress) {
 	}
 
 	// parse keypress
-	var input string
-	if kp.Key != 0 {
-		input = string(rune(kp.Key))
-	} else {
-		input = kp.Text
+	ed.ResolvMode(kp)
+}
+
+func (ed *Editor) ResolvMode(kp key.KeyPress) {
+	if kp.Key == key.Escape {
+		ed.mode = Normal
+		log.Debug("change mode to:%s", ed.mode)
+		return
 	}
 
-	var cmd CmdInsertRune
-	cmd.Run(ed, input)
+	switch ed.mode {
+	case Normal:
+		if kp.Key == 'i' {
+			ed.mode = Insert
+			log.Debug("change mode to:%s", ed.mode)
+		}
+	case Insert:
+		switch kp.Key {
+		case key.Left:
+			cmd := CmdMoveCursor{Direction: CLeft, Repeat: 1}
+			cmd.Run(ed)
+		case key.Up:
+			cmd := CmdMoveCursor{Direction: CUp, Repeat: 1}
+			cmd.Run(ed)
+		case key.Right:
+			cmd := CmdMoveCursor{Direction: CRight, Repeat: 1}
+			cmd.Run(ed)
+		case key.Down:
+			cmd := CmdMoveCursor{Direction: CDown, Repeat: 1}
+			cmd.Run(ed)
+		default:
+			cmd := CmdInsertRune{data: string(rune(kp.Key))}
+			cmd.Run(ed)
+		}
+	case Visual:
+	default:
+	}
 }
