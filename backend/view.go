@@ -1,8 +1,10 @@
 package neoeditor
 
 type View struct {
-	lOffset int  // line offset
-	cOffset int  // character offset, may equal several vOffset, e.g. '\t'
-	vOffset int  // visual offset
-	num     bool // display linenumber
+	XOffset          int //must be 0 when wrap is on
+	YOffset          int //the line displayed in the top of window
+	RCursor, CCursor int //cursor position in the buffer(row,column)
+	XCursor, YCursor int //cursor position in the screen
+	//xUpdate, yUpdate int //start position for redraw
+	Contents [][]rune
 }

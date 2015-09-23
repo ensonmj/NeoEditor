@@ -1,10 +1,19 @@
 package neoeditor
 
 import (
+	//"os"
+
 	"github.com/ensonmj/NeoEditor/lib/codec"
 	"github.com/ensonmj/NeoEditor/lib/key"
 	"github.com/ensonmj/NeoEditor/lib/log"
 )
+
+// Ctrl-w s
+// Split(horizontal)
+type CmdItem struct {
+	Keys []key.KeyPress
+	Name string
+}
 
 func (ed *Editor) DispatchCommand(cmd string) {
 	log.Debug("receive command:%s", cmd)
@@ -28,6 +37,18 @@ func (ed *Editor) DispatchCommand(cmd string) {
 		}
 		log.Debug("parse command [KeyPress] arguments:%v", kp)
 		ed.handleKeyPress(kp)
+	//case "OpenFiles":
+	//log.Debug("receive command [OpenFiles]")
+	//var fPaths []string
+	//if err := codec.Deserialize(payload, &fPaths); err != nil {
+	//log.Critical(err)
+	//return
+	//}
+	//log.Debug("parse command [OpenFiles] arguments:%v", fPaths)
+
+	//ed.OpenFiles(fPaths)
+	default:
+		log.Warn("receive unsupported command:%s", env.Method)
 	}
 }
 
@@ -38,13 +59,28 @@ func (ed *Editor) handleKeyPress(kp key.KeyPress) {
 		return
 	}
 	if kp.Ctrl && kp.Key == 's' {
-		log.Debug("save buffer:%s", ed.bufs[ed.activeBuf])
-		ed.bufs[ed.activeBuf].Close()
+		log.Debug("save buffer:%v", ed.bufs[ed.activeBuf])
+		ed.bufs[ed.activeBuf].Save()
 		return
 	}
 
 	// parse keypress
-
-	ed.bufs[ed.activeBuf].Append([]rune(kp.Text))
-	ed.PubEvent("updateView", ed.bufs[ed.activeBuf].Contents())
+	ed.ResolvMode(kp)
 }
+
+//func (ed *Editor) OpenFiles(fPaths []string) {
+//n := len(ed.bufs)
+//for _, fPath := range fPaths {
+//buf, err := NewBuffer(fPath, os.O_RDWR|os.O_CREATE, 0644)
+//if err != nil {
+//log.Warn("open file[%s] err:%s", fPath, err)
+//continue
+//}
+//ed.bufs = append(ed.bufs, buf)
+//}
+//ed.activeBuf = n
+
+//v := ed.bufs[ed.activeBuf].View
+//log.Debug("View:%v", v)
+//ed.PubEvent("updateView", v)
+//}

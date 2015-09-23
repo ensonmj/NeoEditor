@@ -1,11 +1,11 @@
 package neoeditor
 
 type Tab struct {
-	id        int
-	wnds      []*Window
-	activeWnd int
+	Id        int
+	Wnds      []*Window
+	ActiveWnd int
 }
 
 func NewTab(seq int) *Tab {
-	return &Tab{id: seq, wnds: make([]*Window, 1)}
+	return &Tab{Id: seq, Wnds: make([]*Window, 1)}
 }

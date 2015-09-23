@@ -1,7 +1,8 @@
 package neoeditor
 
 type Edit struct {
-	action string //"insert","replace","delete"
-	line   int
-	data   []rune
+	Action     string //"insert","replace","delete"
+	Row, Col   int
+	Data       []rune
+	Prev, Next *Edit
 }
