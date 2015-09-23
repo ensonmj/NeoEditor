@@ -1,4 +1,4 @@
-package iface
+package neoeditor
 
 type View struct {
 	XOffset          int //must be 0 when wrap is on

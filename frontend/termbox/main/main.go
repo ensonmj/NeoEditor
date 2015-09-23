@@ -1,12 +1,13 @@
 package main
 
 import (
-	"flag"
-	"net/http"
-	_ "net/http/pprof"
+	//"os"
+	//"os/signal"
+	//"sync"
+	//"syscall"
 
-	"github.com/ensonmj/NeoEditor/backend"
-	"github.com/ensonmj/NeoEditor/iface"
+	ned "github.com/ensonmj/NeoEditor/backend"
+	"github.com/ensonmj/NeoEditor/frontend/common"
 	"github.com/ensonmj/NeoEditor/lib/codec"
 	"github.com/ensonmj/NeoEditor/lib/key"
 	"github.com/ensonmj/NeoEditor/lib/log"
@@ -93,20 +94,15 @@ var (
 	}
 )
 
-// Command line flags
-var (
-	showDebug = flag.Bool("debug", false, "Display debug log")
-)
-
 func main() {
 	//log.AddFilter("console", log.DEBUG, log.NewConsoleLogWriter())
 	log.Debug("NeoEditor started")
 	defer log.Close()
 
-	// For profile
-	go func() {
-		http.ListenAndServe("127.0.0.1:5199", nil)
-	}()
+	// When SIGINT or SIGTERM is caught, write to the quitChan
+	//quitChan := make(chan os.Signal)
+	//signal.Notify(quitChan, syscall.SIGINT, syscall.SIGTERM)
+	//wg := &sync.WaitGroup{}
 
 	defer func() {
 		termbox.Close()
@@ -116,13 +112,6 @@ func main() {
 			panic(err)
 		}
 	}()
-
-	flag.Parse()
-
-	if _, err := neoeditor.NewEditor(); err != nil {
-		log.Critical("create editor error:%s", err)
-		panic(err)
-	}
 
 	shutdown = make(chan bool, 1)
 	cmdChan = make(chan string, chanBufLen)
@@ -141,19 +130,20 @@ func main() {
 	}()
 
 	req, _ := zmq.NewSocket(zmq.PUSH)
-	req.Connect("tcp://localhost:5198")
+	req.Connect("inproc://command")
+	//req.Connect("tcp://localhost:5198")
 
 	sub, _ := zmq.NewSocket(zmq.SUB)
+	// tcp will lost the first message
 	//sub.Connect("tcp://localhost:5199")
 	sub.Connect("inproc://notification")
 	sub.SetSubscribe("updateView")
+	sub.SetSubscribe("updateWnd")
 	//sub.SetSubscribe("")
 
-	// Assuming that all extra arguments are files
-	if files := flag.Args(); len(files) > 0 {
-		for _, file := range files {
-			openFile(file)
-		}
+	if _, err := ned.NewEditor(); err != nil {
+		log.Critical("create editor error:%s", err)
+		panic(err)
 	}
 
 	// Receive notification
@@ -163,12 +153,22 @@ func main() {
 			topic, _ := sub.Recv(0)
 			msg, _ := sub.Recv(0)
 			log.Debug("subscriber got msg:%s%s", topic, msg)
-			var v iface.View
-			if err := codec.Deserialize([]byte(msg), &v); err != nil {
-				log.Critical(err)
-				continue
+			switch topic {
+			case "updateView":
+				var v ned.View
+				if err := codec.Deserialize([]byte(msg), &v); err != nil {
+					log.Critical(err)
+					continue
+				}
+				updateView(v)
+			case "updateWnd":
+				var w ned.Window
+				if err := codec.Deserialize([]byte(msg), &w); err != nil {
+					log.Critical(err)
+					continue
+				}
+				updateWnd(&w)
 			}
-			updateView(v)
 		}
 	}()
 
@@ -217,57 +217,37 @@ func handleInput(req *zmq.Socket, ev termbox.Event) {
 	}
 
 	log.Debug("key press:%v", kp)
-	sendCommand(kp)
+	sendKeyPress(kp)
 }
 
 func handleResize(width, height int) {
 	ui.width, ui.height = width, height
 }
 
-func updateView(v iface.View) {
-	log.Debug("View:%v", v)
-	fg, bg := termbox.ColorWhite, termbox.ColorBlack
-	termbox.Clear(fg, bg)
+func updateWnd(w *ned.Window) {
+	log.Debug("update window:%v", w)
+	r := ned.Rect{ned.Point{0, 0}, ui.width, ui.height}
+	common.DrawWindow(w, r, drawSpliter, drawView)
+}
 
-	text := v.Contents
-	x, y := 0, 0
-	cursorOnText := false
-	for _, line := range text {
-		fg, bg := termbox.ColorWhite, termbox.ColorBlack
-		for col, r := range line {
-			if col < ui.width {
-				x = col
-			} else {
-				// wrap, line may have many screen lines
-				x = col - ui.width
-				y++
-			}
-			if x == v.XCursor && y == v.YCursor {
-				// block style cursor
-				fg = fg | termbox.AttrReverse
-				cursorOnText = true
-			}
-			termbox.SetCell(x, y, r, fg, bg)
-		}
-		y++
-	}
-
-	if !cursorOnText {
-		// block style cursor
-		fg = fg | termbox.AttrReverse
-		termbox.SetCell(v.XCursor, v.YCursor, ' ', fg, bg)
-	}
-	termbox.Flush()
+func updateView(v ned.View) {
+	log.Debug("update view:%v", v)
+	drawView(v)
 }
 
 // Command
-func sendCommand(v interface{}) {
-	cmd := codec.Envelope{Method: "KeyPress", Arguments: v}
+func sendCommand(cmd codec.Envelope) {
 	msg, _ := codec.Serialize(cmd)
 	log.Debug("send cmd:%s", msg)
 	cmdChan <- string(msg)
 }
 
-func openFile(fPath string) {
-	sendCommand(map[string]string{"fPath": fPath})
+func sendKeyPress(kp key.KeyPress) {
+	cmd := codec.Envelope{Method: "KeyPress", Arguments: kp}
+	sendCommand(cmd)
+}
+
+func openFiles(fPaths []string) {
+	cmd := codec.Envelope{Method: "OpenFiles", Arguments: fPaths}
+	sendCommand(cmd)
 }

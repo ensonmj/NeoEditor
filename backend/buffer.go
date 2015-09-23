@@ -1,11 +1,11 @@
 package neoeditor
 
 import (
+	"bufio"
 	"errors"
 	"os"
 
-	"github.com/ensonmj/NeoEditor/iface"
-	"github.com/ensonmj/NeoEditor/lib/codec"
+	//"github.com/ensonmj/NeoEditor/lib/codec"
 	"github.com/ensonmj/NeoEditor/lib/log"
 )
 
@@ -14,7 +14,7 @@ const chunkSize = 128
 
 // TODO: store content line by line, and support to highlight diff
 type Buffer struct {
-	iface.View
+	View
 	scratch bool
 	fPath   string
 	file    *os.File
@@ -37,7 +37,17 @@ func NewBuffer(fPath string, flag int, perm os.FileMode) (*Buffer, error) {
 	log.Debug("create new file:%s", fPath)
 
 	buffer := &Buffer{fPath: fPath, file: fd}
-	buffer.data = append(buffer.data, make([]rune, 0, chunkSize))
+
+	// TODO: support empty file
+	//buffer.data = append(buffer.data, make([]rune, 0, chunkSize))
+
+	// read file contents to data
+	scanner := bufio.NewScanner(fd)
+	for scanner.Scan() {
+		line := scanner.Text()
+		buffer.data = append(buffer.data, []rune(line))
+	}
+
 	return buffer, nil
 }
 
@@ -130,38 +140,42 @@ func insertIn(orig, chars []rune, index int) ([]rune, error) {
 	return orig, nil
 }
 
-func (b *Buffer) UnInsert(index int, chars []rune) error {
-	return nil
-}
-
-func (b *Buffer) Surround(start, end int, fChars, bChars []rune) error {
-	return nil
+func (b *Buffer) Save() {
+	log.Debug("save the buffer:%s", b.fPath)
+	b.file.Seek(0, 0)
+	for _, line := range b.data {
+		b.file.Write([]byte(string(line) + "\n"))
+	}
+	b.file.Sync()
 }
 
 func (b *Buffer) Close() {
-	log.Debug("Close the buffer:%s", b.fPath)
-	//b.file.Write([]byte(string(b.data)))
+	log.Debug("close the buffer:%s", b.fPath)
+	b.file.Seek(0, 0)
+	for _, line := range b.data {
+		b.file.Write([]byte(string(line) + "\n"))
+	}
 	b.file.Close()
 }
 
 // Commands
-type CmdNewBuffer struct {
-	fPath string
-	flag  int
-	perm  os.FileMode
-}
+//type CmdNewBuffer struct {
+//fPath string
+//flag  int
+//perm  os.FileMode
+//}
 
-func (c CmdNewBuffer) Run(ed *Editor, args string) error {
-	codec.Deserialize([]byte(args), c)
-	buf, err := NewBuffer(c.fPath, c.flag, c.perm)
-	if err != nil {
-		return err
-	}
-	ed.bufs = append(ed.bufs, buf)
-	ed.activeBuf = len(ed.bufs) - 1
+//func (c CmdNewBuffer) Run(ed *Editor, args string) error {
+//codec.Deserialize([]byte(args), c)
+//buf, err := NewBuffer(c.fPath, c.flag, c.perm)
+//if err != nil {
+//return err
+//}
+//ed.bufs = append(ed.bufs, buf)
+//ed.activeBuf = len(ed.bufs) - 1
 
-	return nil
-}
+//return nil
+//}
 
 type CmdInsertRune struct {
 	data string
@@ -180,30 +194,21 @@ func (c CmdInsertRune) Run(ed *Editor) error {
 	return nil
 }
 
-type CursorDirection int
-
-const (
-	CLeft CursorDirection = iota
-	CUp
-	CRight
-	CDown
-)
-
 type CmdMoveCursor struct {
-	Direction CursorDirection
-	Repeat    int
+	Direction
+	Repeat int
 }
 
 func (c CmdMoveCursor) Run(ed *Editor) error {
 	v := &ed.bufs[ed.activeBuf].View
 	switch c.Direction {
-	case CLeft:
+	case Left:
 		v.CCursor -= c.Repeat
-	case CUp:
+	case Up:
 		v.RCursor -= c.Repeat
-	case CRight:
+	case Right:
 		v.CCursor += c.Repeat
-	case CDown:
+	case Down:
 		v.RCursor += c.Repeat
 	}
 

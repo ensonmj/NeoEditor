@@ -1,42 +1,33 @@
 package neoeditor
 
-import "errors"
+import (
+	"errors"
+)
 
 type Window struct {
-	Type string // "container" or "window"
-	// "full": the root window
-	// "horizontal", "vertical": the container which has 2 subwindows
-	// "above", "under", "left", "right": subwindow
-	Pos    string
+	Type   string // "container" or "window"
+	Direct Direction
 	Parent *Window    // root window has no parent
 	Subs   [2]*Window // 2 subwindows at most
 }
 
 func NewWindow() *Window {
-	return &Window{Type: "window", Pos: "full"}
+	return &Window{Type: "window"}
 }
 
-func (w *Window) Split(orientation string) error {
+// new windown always under or on the right of the orig window w
+// and always stored in the second positon of Subs
+func (w *Window) Split(d Direction) error {
 	if w.Type != "window" {
 		return errors.New("Can't split non-window type window")
 	}
 
 	w.Type = "container"
-	w.Pos = orientation
+	w.Direct = d
 	w.Subs[0] = &Window{Type: "window"}
 	w.Subs[0].Parent = w
 	w.Subs[1] = &Window{Type: "window"}
 	w.Subs[1].Parent = w
-	// new windown always under or on the right of the orig window w
-	// and always stored in the second positon of Subs
-	switch orientation {
-	case "horizontal":
-		w.Subs[0].Pos = "left"
-		w.Subs[0].Pos = "right"
-	case "vertical":
-		w.Subs[0].Pos = "above"
-		w.Subs[0].Pos = "under"
-	}
 
 	return nil
 }

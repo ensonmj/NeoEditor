@@ -1,7 +1,10 @@
 package neoeditor
 
 import (
+	"flag"
 	"fmt"
+	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"time"
 
@@ -15,43 +18,33 @@ const (
 	chanBufLen = 16
 )
 
-type Mode int
-
-const (
-	Normal Mode = iota
-	Insert
-	Visual
-)
-
-func (m Mode) String() string {
-	switch m {
-	case Normal:
-		return "Normal"
-	case Insert:
-		return "Insert"
-	case Visual:
-		return "Visual"
-	default:
-		return "Unknown"
-	}
-}
-
 type Editor struct {
 	//cmds      chan string
-	events            chan codec.Envelope
-	done              chan bool
-	pm                plugin.PluginManager
-	mode              Mode
-	tabs              []*Tab
-	activeTab         int
-	bufs              []*Buffer
-	activeBuf         int
-	uiWidth, uiHeight int // active ui window size
+	events    chan codec.Envelope
+	done      chan bool
+	pm        plugin.PluginManager
+	mode      Mode
+	bufs      []*Buffer
+	activeBuf int
+	tabs      []*Tab
+	activeTab int
 }
+
+// Command line flags
+var (
+	showDebug = flag.Bool("debug", false, "Display debug log")
+)
 
 func NewEditor() (*Editor, error) {
 	log.AddFilter("file", log.DEBUG, log.NewFileLogWriter("./ned.log"))
+
+	// profile
+	go func() {
+		http.ListenAndServe("127.0.0.1:5197", nil)
+	}()
+
 	ed := &Editor{mode: Normal, pm: make(plugin.PluginManager, 1)}
+
 	xui := &plugin.DummyPlugin{}
 	xui.Register(ed.pm)
 
@@ -59,15 +52,11 @@ func NewEditor() (*Editor, error) {
 	ed.events = make(chan codec.Envelope, chanBufLen)
 	ed.done = make(chan bool)
 
-	// create a scratch buffer
-	buf, _ := NewBuffer("", os.O_RDWR|os.O_CREATE, 0644)
-	ed.bufs = append(ed.bufs, buf)
-	ed.activeBuf = 0
-
 	rep, err := zmq.NewSocket(zmq.PULL)
 	if err != nil {
 		return nil, err
 	}
+	rep.Bind("inproc://command")
 	rep.Bind("tcp://*:5198")
 
 	// monitor request
@@ -88,8 +77,8 @@ func NewEditor() (*Editor, error) {
 	if err != nil {
 		return nil, err
 	}
-	//pub.Bind("tcp://*:5199")
 	pub.Bind("inproc://notification")
+	pub.Bind("tcp://*:5199")
 
 	// broadcast notification
 	go func() {
@@ -105,6 +94,29 @@ func NewEditor() (*Editor, error) {
 		}
 	}()
 
+	flag.Parse()
+	// Assuming that all extra arguments are files
+	if files := flag.Args(); len(files) > 0 {
+		for _, fPath := range files {
+			buf, err := NewBuffer(fPath, os.O_RDWR|os.O_CREATE, 0644)
+			if err != nil {
+				log.Warn("open file[%s] err:%s", fPath, err)
+				continue
+			}
+			ed.bufs = append(ed.bufs, buf)
+		}
+	} else {
+		// create a scratch buffer
+		buf, _ := NewBuffer("", os.O_RDWR|os.O_CREATE, 0644)
+		ed.bufs = append(ed.bufs, buf)
+	}
+	ed.activeBuf = 0
+	b := ed.bufs[ed.activeBuf]
+	v := b.View
+	v.Contents = b.data
+	log.Debug("View:%v", v)
+	ed.PubEvent("updateView", v)
+
 	// main loop
 	go func() {
 		for {
@@ -119,4 +131,17 @@ func NewEditor() (*Editor, error) {
 	}()
 
 	return ed, nil
+}
+
+func (ed *Editor) ActiveTab() *Tab {
+	return ed.tabs[ed.activeTab]
+}
+
+func (ed *Editor) ActiveWnd() *Window {
+	t := ed.tabs[ed.activeTab]
+	return t.Wnds[t.ActiveWnd]
+}
+
+func (ed *Editor) ActiveBuf() *Buffer {
+	return ed.bufs[ed.activeBuf]
 }
