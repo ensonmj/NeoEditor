@@ -38,14 +38,17 @@ func NewBuffer(fPath string, flag int, perm os.FileMode) (*Buffer, error) {
 
 	buffer := &Buffer{fPath: fPath, file: fd}
 
-	// TODO: support empty file
-	//buffer.data = append(buffer.data, make([]rune, 0, chunkSize))
-
-	// read file contents to data
-	scanner := bufio.NewScanner(fd)
-	for scanner.Scan() {
-		line := scanner.Text()
-		buffer.data = append(buffer.data, []rune(line))
+	fi, _ := fd.Stat()
+	if fi.Size() == 0 {
+		// new or empty file
+		buffer.data = append(buffer.data, make([]rune, 0, chunkSize))
+	} else {
+		// read file contents to data
+		scanner := bufio.NewScanner(fd)
+		for scanner.Scan() {
+			line := scanner.Text()
+			buffer.data = append(buffer.data, []rune(line))
+		}
 	}
 
 	return buffer, nil
