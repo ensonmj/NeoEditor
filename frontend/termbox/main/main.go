@@ -5,7 +5,8 @@ import (
 	//"os/signal"
 	//"sync"
 	//"syscall"
-	"time"
+	"net/http"
+	_ "net/http/pprof"
 
 	ned "github.com/ensonmj/NeoEditor/backend"
 	"github.com/ensonmj/NeoEditor/frontend/common"
@@ -96,9 +97,14 @@ var (
 )
 
 func main() {
+	// profile
+	go func() {
+		http.ListenAndServe("127.0.0.1:5197", nil)
+	}()
+
+	defer log.Close()
 	//log.AddFilter("console", log.DEBUG, log.NewConsoleLogWriter())
 	log.Debug("NeoEditor started")
-	defer log.Close()
 
 	// When SIGINT or SIGTERM is caught, write to the quitChan
 	//quitChan := make(chan os.Signal)
@@ -106,7 +112,6 @@ func main() {
 	//wg := &sync.WaitGroup{}
 
 	defer func() {
-		termbox.Close()
 		if err := recover(); err != nil {
 			log.Critical(err)
 			log.Close()
@@ -114,7 +119,7 @@ func main() {
 		}
 	}()
 
-	shutdown = make(chan bool, 1)
+	shutdown = make(chan bool)
 	cmdChan = make(chan string, chanBufLen)
 
 	if err := termbox.Init(); err != nil {
@@ -131,13 +136,16 @@ func main() {
 	}()
 
 	req, _ := zmq.NewSocket(zmq.PUSH)
+	defer req.Close()
 	req.Connect("inproc://command")
 	//req.Connect("tcp://localhost:5198")
 
 	sub, _ := zmq.NewSocket(zmq.SUB)
+	defer sub.Close()
 	// tcp will lost the first message
 	//sub.Connect("tcp://localhost:5199")
 	sub.Connect("inproc://notification")
+	sub.SetSubscribe("exit")
 	sub.SetSubscribe("updateView")
 	sub.SetSubscribe("updateWnd")
 	//sub.SetSubscribe("")
@@ -153,7 +161,7 @@ func main() {
 		for {
 			topic, _ := sub.Recv(0)
 			msg, _ := sub.Recv(0)
-			log.Debug("subscriber got msg:%s%s", topic, msg)
+			log.Debug("subscriber got msg:[%s]%s", topic, msg)
 			switch topic {
 			case "updateView":
 				var v ned.View
@@ -169,6 +177,10 @@ func main() {
 					continue
 				}
 				updateWnd(&w)
+			case "exit":
+				log.Debug(msg)
+				close(shutdown)
+				return
 			}
 		}
 	}()
@@ -189,8 +201,7 @@ func main() {
 		case cmd := <-cmdChan:
 			req.Send(cmd, zmq.DONTWAIT)
 		case <-shutdown:
-			time.Sleep(time.Second)
-			log.Debug("NeoEditor quit")
+			log.Debug("termbox frontend quit")
 			return
 			//case <-tickChan:
 		}
@@ -198,10 +209,6 @@ func main() {
 }
 
 func handleInput(req *zmq.Socket, ev termbox.Event) {
-	if ev.Key == termbox.KeyCtrlQ {
-		shutdown <- true
-	}
-
 	var kp key.KeyPress
 	if ev.Ch != 0 {
 		kp.Key = key.Key(ev.Ch)

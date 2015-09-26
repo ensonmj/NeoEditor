@@ -88,6 +88,9 @@ func NewEditor() (*Editor, error) {
 				pub.Send(topic, zmq.SNDMORE)
 				pub.Send(string(msg), 0)
 			case <-ed.done:
+				pub.Send("exit", zmq.SNDMORE)
+				pub.Send("neoeditor exit", 0)
+				pub.Close()
 				log.Debug("editor close notification broadcaster")
 				return
 			}
@@ -123,7 +126,6 @@ func NewEditor() (*Editor, error) {
 			select {
 			case <-ed.done:
 				rep.Close()
-				pub.Close()
 				log.Debug("editor backend main loop exit")
 				return
 			}
