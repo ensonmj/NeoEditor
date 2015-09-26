@@ -13,7 +13,7 @@ const (
 	Visual
 )
 
-type KeyAction map[key.KeyPress]func(*Editor, key.KeyPress) error
+type KeyAction map[key.KeyPress]func(*Editor, key.KeyPress) (bool, error)
 
 var modeActors = map[Mode]KeyAction{}
 
@@ -38,6 +38,9 @@ func registerModeAction() {
 	nKA[key.KeyPress{Key: key.Up}] = moveCursor
 	nKA[key.KeyPress{Key: key.Right}] = moveCursor
 	nKA[key.KeyPress{Key: key.Down}] = moveCursor
+	nKA[key.KeyPress{Ctrl: true, Key: 'q'}] = func(*Editor, key.KeyPress) (bool, error) {
+		return true, nil
+	}
 
 	// insert
 	//iKA[key.KeyPress{Key: key.Escape}] = resolvMode
@@ -50,15 +53,15 @@ func registerModeAction() {
 	modeActors[Visual] = vKA
 }
 
-func runModeAction(ed *Editor, kp key.KeyPress) error {
+func runModeAction(ed *Editor, kp key.KeyPress) (bool, error) {
 	log.Debug("mode:%v kp:%v", ed.mode, kp)
 	if resolvMode(ed, kp) {
-		return nil
+		return false, nil
 	}
 
 	keyAction := modeActors[ed.mode]
 	if actor, ok := keyAction[kp]; ok {
-		actor(ed, kp)
+		return actor(ed, kp)
 	} else {
 		if ed.mode == Insert {
 			cmd := CmdInsertRune{string(kp.Key)}
@@ -69,7 +72,7 @@ func runModeAction(ed *Editor, kp key.KeyPress) error {
 		}
 	}
 
-	return nil
+	return false, nil
 }
 
 func resolvMode(ed *Editor, kp key.KeyPress) bool {

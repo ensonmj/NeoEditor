@@ -65,9 +65,18 @@ func NewEditor() (*Editor, error) {
 			log.Debug("received:%v,%v", cmd, err)
 			if err != nil {
 				log.Debug("command monitor got an err:%v", err)
+				close(ed.done)
 				return
 			}
-			dispatchCommand(ed, string(cmd))
+			exit, err := dispatchCommand(ed, string(cmd))
+			if exit {
+				rep.Close()
+				log.Debug("command monitor exit")
+				return
+			}
+			if err != nil {
+				ed.PubEvent("error", err)
+			}
 		}
 	}()
 
@@ -130,7 +139,6 @@ func NewEditor() (*Editor, error) {
 		for {
 			select {
 			case <-ed.done:
-				rep.Close()
 				log.Debug("editor backend main loop exit")
 				return
 			case <-ticker.C:

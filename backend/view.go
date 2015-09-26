@@ -39,7 +39,7 @@ type View struct {
 //return nil
 //}
 
-func moveCursor(ed *Editor, kp key.KeyPress) error {
+func moveCursor(ed *Editor, kp key.KeyPress) (bool, error) {
 	v := ed.ActiveView()
 	switch kp.Key {
 	case key.Left:
@@ -57,5 +57,5 @@ func moveCursor(ed *Editor, kp key.KeyPress) error {
 	log.Debug("View:%v", v)
 	ed.PubEvent("updateView", v)
 
-	return nil
+	return false, nil
 }
