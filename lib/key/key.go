@@ -132,10 +132,7 @@ func (k Key) String() string {
 }
 
 // KeyPress describes a key press event.
-// Note that Key does not distinguish between capital and non-capital letters;
-// use the Text property for this purpose.
 type KeyPress struct {
-	Text                    string // the text representation of the key
-	Key                     Key    // the unicode for the key that was pressed
-	Shift, Super, Alt, Ctrl bool   // true if modifier key was pressed
+	Key                     Key  // the unicode for the key that was pressed
+	Alt, Ctrl, Shift, Super bool // true if modifier key was pressed
 }

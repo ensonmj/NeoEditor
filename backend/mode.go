@@ -13,6 +13,10 @@ const (
 	Visual
 )
 
+type KeyAction map[key.KeyPress]func(*Editor, key.KeyPress) error
+
+var modeActors = map[Mode]KeyAction{}
+
 func (m Mode) String() string {
 	switch m {
 	case Normal:
@@ -26,44 +30,70 @@ func (m Mode) String() string {
 	}
 }
 
-func (ed *Editor) ResolvMode(kp key.KeyPress) {
+func registerModeAction() {
+	nKA, iKA, vKA := KeyAction{}, KeyAction{}, KeyAction{}
+
+	// normal
+	nKA[key.KeyPress{Key: key.Left}] = moveCursor
+	nKA[key.KeyPress{Key: key.Up}] = moveCursor
+	nKA[key.KeyPress{Key: key.Right}] = moveCursor
+	nKA[key.KeyPress{Key: key.Down}] = moveCursor
+
+	// insert
+	//iKA[key.KeyPress{Key: key.Escape}] = resolvMode
+
+	// visual
+	//vKA[key.KeyPress{Key: key.Escape}] = resolvMode
+
+	modeActors[Normal] = nKA
+	modeActors[Insert] = iKA
+	modeActors[Visual] = vKA
+}
+
+func runModeAction(ed *Editor, kp key.KeyPress) error {
+	log.Debug("mode:%v kp:%v", ed.mode, kp)
+	if resolvMode(ed, kp) {
+		return nil
+	}
+
+	keyAction := modeActors[ed.mode]
+	if actor, ok := keyAction[kp]; ok {
+		actor(ed, kp)
+	} else {
+		if ed.mode == Insert {
+			cmd := CmdInsertRune{string(kp.Key)}
+			cmd.Run(ed)
+		} else {
+			str := ed.AccumulateKey(kp)
+			log.Debug("accumulated keys:%s", str)
+		}
+	}
+
+	return nil
+}
+
+func resolvMode(ed *Editor, kp key.KeyPress) bool {
+	changed := false
 	if kp.Key == key.Escape {
 		ed.mode = Normal
-		log.Debug("change mode to:%s", ed.mode)
-		return
+		changed = true
 	}
 
 	switch ed.mode {
 	case Normal:
 		if kp.Key == 'i' {
 			ed.mode = Insert
-			log.Debug("change mode to:%s", ed.mode)
-		}
-		// test split
-		if kp.Key == 's' {
-			log.Debug("split window")
-			ed.ActiveWnd().Split(Horizontal)
-			ed.PubEvent("updateWnd", ed.ActiveWnd())
+			changed = true
 		}
 	case Insert:
-		switch kp.Key {
-		case key.Left:
-			cmd := CmdMoveCursor{Direction: Left, Repeat: 1}
-			cmd.Run(ed)
-		case key.Up:
-			cmd := CmdMoveCursor{Direction: Up, Repeat: 1}
-			cmd.Run(ed)
-		case key.Right:
-			cmd := CmdMoveCursor{Direction: Right, Repeat: 1}
-			cmd.Run(ed)
-		case key.Down:
-			cmd := CmdMoveCursor{Direction: Down, Repeat: 1}
-			cmd.Run(ed)
-		default:
-			cmd := CmdInsertRune{data: string(rune(kp.Key))}
-			cmd.Run(ed)
-		}
 	case Visual:
-	default:
+	}
+
+	if changed {
+		log.Debug("change mode to:%s", ed.mode)
+		return true
+	} else {
+		log.Debug("keep mode in:%s", ed.mode)
+		return false
 	}
 }

@@ -97,7 +97,7 @@ var (
 )
 
 func main() {
-	// profile
+	// /debug/pprof for profile
 	go func() {
 		http.ListenAndServe("127.0.0.1:5197", nil)
 	}()
@@ -111,13 +111,12 @@ func main() {
 	//signal.Notify(quitChan, syscall.SIGINT, syscall.SIGTERM)
 	//wg := &sync.WaitGroup{}
 
-	defer func() {
-		if err := recover(); err != nil {
-			log.Critical(err)
-			log.Close()
-			panic(err)
-		}
-	}()
+	//defer func() {
+	//if err := recover(); err != nil {
+	//log.Critical(err)
+	//panic(err)
+	//}
+	//}()
 
 	shutdown = make(chan bool)
 	cmdChan = make(chan string, chanBufLen)
@@ -212,7 +211,6 @@ func handleInput(req *zmq.Socket, ev termbox.Event) {
 	var kp key.KeyPress
 	if ev.Ch != 0 {
 		kp.Key = key.Key(ev.Ch)
-		kp.Text = string(ev.Ch)
 	} else {
 		var ok bool
 		// kp is “zero value" if not found in map
@@ -221,7 +219,6 @@ func handleInput(req *zmq.Socket, ev termbox.Event) {
 		if !ok {
 			kp.Key = key.Key(ev.Ch)
 		}
-		kp.Text = string(kp.Key)
 	}
 
 	log.Debug("key press:%v", kp)

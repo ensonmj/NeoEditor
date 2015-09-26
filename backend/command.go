@@ -12,13 +12,13 @@ type Commander interface {
 	Run(ed *Editor, args codec.RawMessage)
 }
 
-type CommandManager map[string]Commander
+var cmdManager = map[string]Commander{}
 
-func (cm CommandManager) registerCommands() {
-	cm["KeyPress"] = CmdKeyPress{}
+func registerCommands() {
+	cmdManager["KeyPress"] = CmdKeyPress{}
 }
 
-func (cm CommandManager) dispatchCommand(ed *Editor, cmd string) {
+func dispatchCommand(ed *Editor, cmd string) {
 	log.Debug("receive command:%s", cmd)
 	var args codec.RawMessage
 	env := codec.Envelope{
@@ -30,7 +30,7 @@ func (cm CommandManager) dispatchCommand(ed *Editor, cmd string) {
 	}
 	log.Debug("parse command:{%s, %v}", env.Method, args)
 
-	if cmd, ok := cm[env.Method]; ok {
+	if cmd, ok := cmdManager[env.Method]; ok {
 		log.Debug("receive command [%s]", env.Method)
 		cmd.Run(ed, args)
 	} else {
@@ -39,8 +39,7 @@ func (cm CommandManager) dispatchCommand(ed *Editor, cmd string) {
 }
 
 // Commands
-type CmdKeyPress struct {
-}
+type CmdKeyPress struct{}
 
 func (c CmdKeyPress) Run(ed *Editor, args codec.RawMessage) {
 	log.Debug("run command [KeyPress]")
@@ -61,22 +60,5 @@ func (c CmdKeyPress) Run(ed *Editor, args codec.RawMessage) {
 	}
 
 	// parse keypress
-	ed.ResolvMode(kp)
+	runModeAction(ed, kp)
 }
-
-//func (ed *Editor) OpenFiles(fPaths []string) {
-//n := len(ed.bufs)
-//for _, fPath := range fPaths {
-//buf, err := NewBuffer(fPath, os.O_RDWR|os.O_CREATE, 0644)
-//if err != nil {
-//log.Warn("open file[%s] err:%s", fPath, err)
-//continue
-//}
-//ed.bufs = append(ed.bufs, buf)
-//}
-//ed.activeBuf = n
-
-//v := ed.bufs[ed.activeBuf].View
-//log.Debug("View:%v", v)
-//ed.PubEvent("updateView", v)
-//}

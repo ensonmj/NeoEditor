@@ -159,24 +159,6 @@ func (b *Buffer) Close() {
 }
 
 // Commands
-//type CmdNewBuffer struct {
-//fPath string
-//flag  int
-//perm  os.FileMode
-//}
-
-//func (c CmdNewBuffer) Run(ed *Editor, args string) error {
-//codec.Deserialize([]byte(args), c)
-//buf, err := NewBuffer(c.fPath, c.flag, c.perm)
-//if err != nil {
-//return err
-//}
-//ed.bufs = append(ed.bufs, buf)
-//ed.activeBuf = len(ed.bufs) - 1
-
-//return nil
-//}
-
 type CmdInsertRune struct {
 	data string
 }
@@ -188,31 +170,6 @@ func (c CmdInsertRune) Run(ed *Editor) error {
 	ed.bufs[ed.activeBuf].Insert([]rune(c.data))
 
 	v := ed.bufs[ed.activeBuf].View
-	log.Debug("View:%v", v)
-	ed.PubEvent("updateView", v)
-
-	return nil
-}
-
-type CmdMoveCursor struct {
-	Direction
-	Repeat int
-}
-
-func (c CmdMoveCursor) Run(ed *Editor) error {
-	v := &ed.bufs[ed.activeBuf].View
-	switch c.Direction {
-	case Left:
-		v.CCursor -= c.Repeat
-	case Up:
-		v.RCursor -= c.Repeat
-	case Right:
-		v.CCursor += c.Repeat
-	case Down:
-		v.RCursor += c.Repeat
-	}
-
-	v.XCursor, v.YCursor = v.CCursor, v.RCursor
 	log.Debug("View:%v", v)
 	ed.PubEvent("updateView", v)
 

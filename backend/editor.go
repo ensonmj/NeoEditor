@@ -4,8 +4,10 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/ensonmj/NeoEditor/lib/codec"
+	"github.com/ensonmj/NeoEditor/lib/key"
 	"github.com/ensonmj/NeoEditor/lib/log"
 	"github.com/ensonmj/NeoEditor/lib/plugin"
 	zmq "github.com/pebbe/zmq4"
@@ -18,9 +20,9 @@ const (
 type Editor struct {
 	events    chan codec.Envelope
 	done      chan bool
-	cm        CommandManager
 	pm        plugin.PluginManager
 	mode      Mode
+	keys      []rune
 	bufs      []*Buffer
 	activeBuf int
 	tabs      []*Tab
@@ -37,16 +39,17 @@ func NewEditor() (*Editor, error) {
 
 	ed := &Editor{
 		mode: Normal,
-		cm:   make(CommandManager),
 		pm:   make(plugin.PluginManager),
 	}
 
 	//ed.cmds = make(chan string, chanBufLen)
 	ed.events = make(chan codec.Envelope, chanBufLen)
 	ed.done = make(chan bool)
-	ed.cm.registerCommands()
 	xui := &plugin.DummyPlugin{}
 	xui.Register(ed.pm)
+
+	registerCommands()
+	registerModeAction()
 
 	rep, err := zmq.NewSocket(zmq.PULL)
 	if err != nil {
@@ -64,7 +67,7 @@ func NewEditor() (*Editor, error) {
 				log.Debug("command monitor got an err:%v", err)
 				return
 			}
-			ed.cm.dispatchCommand(ed, string(cmd))
+			dispatchCommand(ed, string(cmd))
 		}
 	}()
 
@@ -120,6 +123,8 @@ func NewEditor() (*Editor, error) {
 	log.Debug("View:%v", v)
 	ed.PubEvent("updateView", v)
 
+	// TODO: start ticker on demand
+	ticker := time.NewTicker(5 * time.Millisecond)
 	// main loop
 	go func() {
 		for {
@@ -128,6 +133,8 @@ func NewEditor() (*Editor, error) {
 				rep.Close()
 				log.Debug("editor backend main loop exit")
 				return
+			case <-ticker.C:
+				ed.ClearKeys()
 			}
 		}
 	}()
@@ -140,10 +147,27 @@ func (ed *Editor) ActiveTab() *Tab {
 }
 
 func (ed *Editor) ActiveWnd() *Window {
-	t := ed.tabs[ed.activeTab]
+	t := ed.ActiveTab()
 	return t.Wnds[t.ActiveWnd]
 }
 
 func (ed *Editor) ActiveBuf() *Buffer {
 	return ed.bufs[ed.activeBuf]
+}
+
+func (ed *Editor) ActiveView() *View {
+	return &ed.ActiveBuf().View
+}
+
+func (ed *Editor) AccumulateKey(kp key.KeyPress) string {
+	ed.keys = append(ed.keys, rune(kp.Key))
+	return string(ed.keys)
+}
+
+func (ed *Editor) AllKeys() string {
+	return string(ed.keys)
+}
+
+func (ed *Editor) ClearKeys() {
+	ed.keys = nil
 }
