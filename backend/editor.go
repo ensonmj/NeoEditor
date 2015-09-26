@@ -3,10 +3,7 @@ package neoeditor
 import (
 	"flag"
 	"fmt"
-	"net/http"
-	_ "net/http/pprof"
 	"os"
-	"time"
 
 	"github.com/ensonmj/NeoEditor/lib/codec"
 	"github.com/ensonmj/NeoEditor/lib/log"
@@ -19,9 +16,9 @@ const (
 )
 
 type Editor struct {
-	//cmds      chan string
 	events    chan codec.Envelope
 	done      chan bool
+	cm        CommandManager
 	pm        plugin.PluginManager
 	mode      Mode
 	bufs      []*Buffer
@@ -38,19 +35,18 @@ var (
 func NewEditor() (*Editor, error) {
 	log.AddFilter("file", log.DEBUG, log.NewFileLogWriter("./ned.log"))
 
-	// profile
-	go func() {
-		http.ListenAndServe("127.0.0.1:5197", nil)
-	}()
-
-	ed := &Editor{mode: Normal, pm: make(plugin.PluginManager, 1)}
-
-	xui := &plugin.DummyPlugin{}
-	xui.Register(ed.pm)
+	ed := &Editor{
+		mode: Normal,
+		cm:   make(CommandManager),
+		pm:   make(plugin.PluginManager),
+	}
 
 	//ed.cmds = make(chan string, chanBufLen)
 	ed.events = make(chan codec.Envelope, chanBufLen)
 	ed.done = make(chan bool)
+	ed.cm.registerCommands()
+	xui := &plugin.DummyPlugin{}
+	xui.Register(ed.pm)
 
 	rep, err := zmq.NewSocket(zmq.PULL)
 	if err != nil {
@@ -65,10 +61,10 @@ func NewEditor() (*Editor, error) {
 			cmd, err := rep.Recv(0)
 			log.Debug("received:%v,%v", cmd, err)
 			if err != nil {
-				time.Sleep(time.Second)
-				continue
+				log.Debug("command monitor got an err:%v", err)
+				return
 			}
-			ed.DispatchCommand(string(cmd))
+			ed.cm.dispatchCommand(ed, string(cmd))
 		}
 	}()
 
@@ -83,14 +79,18 @@ func NewEditor() (*Editor, error) {
 	// broadcast notification
 	go func() {
 		for {
-			ev := <-ed.events
-
-			// env.Method as topic, and env.Arguments as content
-			topic := fmt.Sprintf("%s", ev.Method)
-			msg, _ := codec.Serialize(ev.Arguments)
-			log.Debug("broadcast event:%s%s", topic, string(msg))
-			pub.Send(topic, zmq.SNDMORE)
-			pub.Send(string(msg), 0)
+			select {
+			case ev := <-ed.events:
+				// env.Method as topic, and env.Arguments as content
+				topic := fmt.Sprintf("%s", ev.Method)
+				msg, _ := codec.Serialize(ev.Arguments)
+				log.Debug("broadcast event:%s%s", topic, string(msg))
+				pub.Send(topic, zmq.SNDMORE)
+				pub.Send(string(msg), 0)
+			case <-ed.done:
+				log.Debug("editor close notification broadcaster")
+				return
+			}
 		}
 	}()
 
@@ -121,9 +121,9 @@ func NewEditor() (*Editor, error) {
 	go func() {
 		for {
 			select {
-			//case cmd := <-ed.cmds:
-			//ed.DispatchCommand(cmd)
 			case <-ed.done:
+				rep.Close()
+				pub.Close()
 				log.Debug("editor backend main loop exit")
 				return
 			}

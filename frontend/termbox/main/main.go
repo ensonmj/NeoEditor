@@ -5,6 +5,7 @@ import (
 	//"os/signal"
 	//"sync"
 	//"syscall"
+	"time"
 
 	ned "github.com/ensonmj/NeoEditor/backend"
 	"github.com/ensonmj/NeoEditor/frontend/common"
@@ -188,6 +189,7 @@ func main() {
 		case cmd := <-cmdChan:
 			req.Send(cmd, zmq.DONTWAIT)
 		case <-shutdown:
+			time.Sleep(time.Second)
 			log.Debug("NeoEditor quit")
 			return
 			//case <-tickChan:
@@ -198,7 +200,6 @@ func main() {
 func handleInput(req *zmq.Socket, ev termbox.Event) {
 	if ev.Key == termbox.KeyCtrlQ {
 		shutdown <- true
-		return
 	}
 
 	var kp key.KeyPress

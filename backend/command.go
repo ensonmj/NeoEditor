@@ -8,52 +8,48 @@ import (
 	"github.com/ensonmj/NeoEditor/lib/log"
 )
 
-// Ctrl-w s
-// Split(horizontal)
-type CmdItem struct {
-	Keys []key.KeyPress
-	Name string
+type Commander interface {
+	Run(ed *Editor, args codec.RawMessage)
 }
 
-func (ed *Editor) DispatchCommand(cmd string) {
+type CommandManager map[string]Commander
+
+func (cm CommandManager) registerCommands() {
+	cm["KeyPress"] = CmdKeyPress{}
+}
+
+func (cm CommandManager) dispatchCommand(ed *Editor, cmd string) {
 	log.Debug("receive command:%s", cmd)
-	var payload codec.RawMessage
+	var args codec.RawMessage
 	env := codec.Envelope{
-		Arguments: &payload,
+		Arguments: &args,
 	}
 	if err := codec.Deserialize([]byte(cmd), &env); err != nil {
 		log.Critical(err)
 		return
 	}
-	log.Debug("parse command:{%s, %v}", env.Method, payload)
+	log.Debug("parse command:{%s, %v}", env.Method, args)
 
-	switch env.Method {
-	case "KeyPress":
-		log.Debug("receive command [KeyPress]")
-		var kp key.KeyPress
-		if err := codec.Deserialize(payload, &kp); err != nil {
-			log.Critical(err)
-			return
-		}
-		log.Debug("parse command [KeyPress] arguments:%v", kp)
-		ed.handleKeyPress(kp)
-	//case "OpenFiles":
-	//log.Debug("receive command [OpenFiles]")
-	//var fPaths []string
-	//if err := codec.Deserialize(payload, &fPaths); err != nil {
-	//log.Critical(err)
-	//return
-	//}
-	//log.Debug("parse command [OpenFiles] arguments:%v", fPaths)
-
-	//ed.OpenFiles(fPaths)
-	default:
-		log.Warn("receive unsupported command:%s", env.Method)
+	if cmd, ok := cm[env.Method]; ok {
+		log.Debug("receive command [%s]", env.Method)
+		cmd.Run(ed, args)
+	} else {
+		log.Warn("receive unsupported command [%s]", env.Method)
 	}
 }
 
-func (ed *Editor) handleKeyPress(kp key.KeyPress) {
-	log.Debug("receive key press:%v", kp)
+// Commands
+type CmdKeyPress struct {
+}
+
+func (c CmdKeyPress) Run(ed *Editor, args codec.RawMessage) {
+	log.Debug("run command [KeyPress]")
+	var kp key.KeyPress
+	if err := codec.Deserialize(args, &kp); err != nil {
+		log.Critical(err)
+		return
+	}
+	log.Debug("parse command [KeyPress] arguments:%v", kp)
 	if kp.Ctrl && kp.Key == 'q' {
 		close(ed.done)
 		return
