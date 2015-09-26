@@ -64,8 +64,7 @@ func runModeAction(ed *Editor, kp key.KeyPress) (bool, error) {
 		return actor(ed, kp)
 	} else {
 		if ed.mode == Insert {
-			cmd := CmdInsertRune{string(kp.Key)}
-			cmd.Run(ed)
+			ed.ActiveBuf().Insert([]rune(string(kp.Key)))
 		} else {
 			str := ed.AccumulateKey(kp)
 			log.Debug("accumulated keys:%s", str)

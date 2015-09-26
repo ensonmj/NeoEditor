@@ -18,7 +18,6 @@ const (
 )
 
 type Editor struct {
-	events    chan codec.Envelope
 	done      chan bool
 	pm        plugin.PluginManager
 	mode      Mode
@@ -43,11 +42,11 @@ func NewEditor() (*Editor, error) {
 	}
 
 	//ed.cmds = make(chan string, chanBufLen)
-	ed.events = make(chan codec.Envelope, chanBufLen)
 	ed.done = make(chan bool)
 	xui := &plugin.DummyPlugin{}
 	xui.Register(ed.pm)
 
+	initEvent()
 	registerCommands()
 	registerModeAction()
 
@@ -75,7 +74,7 @@ func NewEditor() (*Editor, error) {
 				return
 			}
 			if err != nil {
-				ed.PubEvent("error", err)
+				pubEvent("error", err)
 			}
 		}
 	}()
@@ -92,7 +91,7 @@ func NewEditor() (*Editor, error) {
 	go func() {
 		for {
 			select {
-			case ev := <-ed.events:
+			case ev := <-pollEvent():
 				// env.Method as topic, and env.Arguments as content
 				topic := fmt.Sprintf("%s", ev.Method)
 				msg, _ := codec.Serialize(ev.Arguments)
@@ -130,7 +129,7 @@ func NewEditor() (*Editor, error) {
 	v := b.View
 	v.Contents = b.data
 	log.Debug("View:%v", v)
-	ed.PubEvent("updateView", v)
+	pubEvent("updateView", v)
 
 	// TODO: start ticker on demand
 	ticker := time.NewTicker(5 * time.Millisecond)

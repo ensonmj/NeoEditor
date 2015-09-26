@@ -93,6 +93,10 @@ func (b *Buffer) Insert(chars []rune) error {
 	b.XCursor, b.YCursor = b.CCursor, b.RCursor
 	b.View.Contents = b.data
 
+	v := b.View
+	log.Debug("View:%v", v)
+	pubEvent("updateView", v)
+
 	return nil
 }
 
@@ -156,22 +160,4 @@ func (b *Buffer) Close() {
 		b.file.Write([]byte(string(line) + "\n"))
 	}
 	b.file.Close()
-}
-
-// Commands
-type CmdInsertRune struct {
-	data string
-}
-
-func (c CmdInsertRune) Run(ed *Editor) error {
-	log.Debug("InsertRune data:%s", c.data)
-	//codec.Deserialize([]byte(args), c)
-	//log.Debug("after parse:%v", c)
-	ed.bufs[ed.activeBuf].Insert([]rune(c.data))
-
-	v := ed.bufs[ed.activeBuf].View
-	log.Debug("View:%v", v)
-	ed.PubEvent("updateView", v)
-
-	return nil
 }

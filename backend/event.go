@@ -5,13 +5,18 @@ import (
 	"github.com/ensonmj/NeoEditor/lib/log"
 )
 
-type Event struct {
-	topic string
-	codec.Envelope
+var events chan codec.Envelope
+
+func initEvent() {
+	events = make(chan codec.Envelope, chanBufLen)
 }
 
-func (ed *Editor) PubEvent(topic string, arg interface{}) {
+func pollEvent() chan codec.Envelope {
+	return events
+}
+
+func pubEvent(topic string, arg interface{}) {
 	env := codec.Envelope{Method: topic, Arguments: arg}
 	log.Debug("publish event:%v", env)
-	ed.events <- env
+	events <- env
 }

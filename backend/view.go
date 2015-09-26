@@ -55,7 +55,7 @@ func moveCursor(ed *Editor, kp key.KeyPress) (bool, error) {
 
 	v.XCursor, v.YCursor = v.CCursor, v.RCursor
 	log.Debug("View:%v", v)
-	ed.PubEvent("updateView", v)
+	pubEvent("updateView", v)
 
 	return false, nil
 }
