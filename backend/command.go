@@ -20,6 +20,7 @@ func registerCommands() {
 	cmdManager["KeyPress"] = CmdKeyPress{}
 }
 
+// return true if program will exit
 func dispatchCommand(ed *Editor, cmd string) (bool, error) {
 	log.Debug("receive command:%s", cmd)
 	var args codec.RawMessage

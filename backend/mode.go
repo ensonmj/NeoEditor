@@ -11,8 +11,10 @@ const (
 	Normal Mode = iota
 	Insert
 	Visual
+	Command
 )
 
+// return true if program will exit
 type KeyAction map[key.KeyPress]func(*Editor, key.KeyPress) (bool, error)
 
 var modeActors = map[Mode]KeyAction{}
@@ -31,7 +33,7 @@ func (m Mode) String() string {
 }
 
 func registerModeAction() {
-	nKA, iKA, vKA := KeyAction{}, KeyAction{}, KeyAction{}
+	nKA, iKA, vKA, cKA := KeyAction{}, KeyAction{}, KeyAction{}, KeyAction{}
 
 	// normal
 	nKA[key.KeyPress{Key: key.Left}] = moveCursor
@@ -48,11 +50,19 @@ func registerModeAction() {
 	// visual
 	//vKA[key.KeyPress{Key: key.Escape}] = resolvMode
 
+	// command
+	cKA[key.KeyPress{Key: 'w'}] = func(ed *Editor, kp key.KeyPress) (bool, error) {
+		ed.ActiveBuf().Save()
+		return false, nil
+	}
+
 	modeActors[Normal] = nKA
 	modeActors[Insert] = iKA
 	modeActors[Visual] = vKA
+	modeActors[Command] = cKA
 }
 
+// TODO: find action according to accumulated keys
 func runModeAction(ed *Editor, kp key.KeyPress) (bool, error) {
 	log.Debug("mode:%v kp:%v", ed.mode, kp)
 	if resolvMode(ed, kp) {
@@ -66,7 +76,12 @@ func runModeAction(ed *Editor, kp key.KeyPress) (bool, error) {
 		if ed.mode == Insert {
 			ed.ActiveBuf().Insert([]rune(string(kp.Key)))
 		} else {
-			str := ed.AccumulateKey(kp)
+			var str string
+			if kp.Key == key.Enter {
+				str = ed.ClearKeys()
+			} else {
+				str = ed.AccumulateKey(kp)
+			}
 			log.Debug("accumulated keys:%s", str)
 		}
 	}
@@ -75,16 +90,21 @@ func runModeAction(ed *Editor, kp key.KeyPress) (bool, error) {
 }
 
 func resolvMode(ed *Editor, kp key.KeyPress) bool {
-	changed := false
 	if kp.Key == key.Escape {
 		ed.mode = Normal
-		changed = true
+		log.Debug("change mode to:%s", ed.mode)
+		return true
 	}
 
+	changed := false
 	switch ed.mode {
 	case Normal:
-		if kp.Key == 'i' {
+		switch kp.Key {
+		case 'i':
 			ed.mode = Insert
+			changed = true
+		case ':':
+			ed.mode = Command
 			changed = true
 		}
 	case Insert:

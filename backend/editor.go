@@ -4,7 +4,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"time"
 
 	"github.com/ensonmj/NeoEditor/lib/codec"
 	"github.com/ensonmj/NeoEditor/lib/key"
@@ -132,7 +131,6 @@ func NewEditor() (*Editor, error) {
 	pubEvent("updateView", v)
 
 	// TODO: start ticker on demand
-	ticker := time.NewTicker(5 * time.Millisecond)
 	// main loop
 	go func() {
 		for {
@@ -140,8 +138,6 @@ func NewEditor() (*Editor, error) {
 			case <-ed.done:
 				log.Debug("editor backend main loop exit")
 				return
-			case <-ticker.C:
-				ed.ClearKeys()
 			}
 		}
 	}()
@@ -175,6 +171,8 @@ func (ed *Editor) AllKeys() string {
 	return string(ed.keys)
 }
 
-func (ed *Editor) ClearKeys() {
+func (ed *Editor) ClearKeys() string {
+	str := string(ed.keys)
 	ed.keys = nil
+	return str
 }
