@@ -2,7 +2,7 @@ package neoeditor
 
 import (
 	"github.com/ensonmj/NeoEditor/lib/key"
-	"github.com/gpmgo/gopm/modules/log"
+	"github.com/ensonmj/NeoEditor/lib/log"
 )
 
 type View struct {
