@@ -74,7 +74,8 @@ func runModeAction(ed *Editor, kp key.KeyPress) (bool, error) {
 		return actor(ed, kp)
 	} else {
 		if ed.mode == Insert {
-			ed.ActiveBuf().Insert([]rune(string(kp.Key)))
+			//ed.ActiveBuf().Insert([]rune(string(kp.Key)))
+			ed.ActiveBuf().Insert(rune(kp.Key))
 		} else {
 			var str string
 			if kp.Key == key.Enter {

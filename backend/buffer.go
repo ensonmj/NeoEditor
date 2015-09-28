@@ -5,7 +5,6 @@ import (
 	"errors"
 	"os"
 
-	//"github.com/ensonmj/NeoEditor/lib/codec"
 	"github.com/ensonmj/NeoEditor/lib/log"
 )
 
@@ -54,51 +53,47 @@ func NewBuffer(fPath string, flag int, perm os.FileMode) (*Buffer, error) {
 	return buffer, nil
 }
 
-//func (b *Buffer) String() string {
-//return b.fPath + ":" + string(b.data)
-//}
-
 func (b *Buffer) Contents() [][]rune {
 	log.Debug("buffer contents:%#v", b.data)
 	return b.data
 }
 
-func (b *Buffer) Insert(chars []rune) error {
+func (b *Buffer) Insert(char rune) error {
 	row, col := b.RCursor, b.CCursor
-	log.Debug("Insert %s in %d,%d", string(chars), row, col)
-	lineStart := 0 // start pos of a batch chars which splited by '\n'
-	for i, c := range chars {
-		if c == '\n' {
-			buf := b.data[row]
-			nextLine := make([]rune, 0, chunkSize)
-			//copy the ramain to next line
-			copy(nextLine, buf[col:])
-			b.data = append(b.data, nextLine)
+	log.Debug("Insert %s in %d,%d", string(char), row, col)
+	// '\n' not saved in the buffer
+	if char == '\n' {
+		buf := b.data[row]
 
-			// '\n' not saved in the buffer
-			b.data[row], _ = replaceFrom(buf, chars[lineStart:i], col)
-			lineStart = i + 1
-			row++
-			col = 0
-		} else if i == len(chars)-1 {
-			buf := b.data[row]
-			b.data[row], _ = insertIn(buf, chars[lineStart:], col)
-			col = col + len(chars[lineStart:])
-			log.Debug("buffer content:%v", b.data)
-		} else {
-			continue
-		}
+		//copy the ramain to next line
+		nextLine := make([]rune, len(buf[col:]), chunkSize)
+		copy(nextLine, buf[col:])
+
+		//update current row
+		b.data[row] = buf[:col]
+		log.Debug("enter split:[%v][%v]", b.data[row], nextLine)
+
+		// insert the nextLine into data
+		b.data = append(b.data, nil)
+		copy(b.data[row+2:], b.data[row+1:])
+		b.data[row+1] = nextLine
+		log.Debug("all data:%v", b.data)
+
+		// update row and col
+		row++
+		col = 0
+	} else {
+		buf := b.data[row]
+		b.data[row], _ = insertIn(buf, []rune{char}, col)
+		col++
 	}
 
 	b.RCursor, b.CCursor = row, col
-
-	// TODO: calc cursor position
-	b.XCursor, b.YCursor = b.CCursor, b.RCursor
+	b.XCursor, b.YCursor = b.CCursor-b.XOffset, b.RCursor-b.YOffset
 	b.View.Contents = b.data
 
-	v := b.View
-	log.Debug("View:%v", v)
-	pubEvent("updateView", v)
+	log.Debug("view:%v", b.View)
+	pubEvent("updateView", b.View)
 
 	return nil
 }
