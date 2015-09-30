@@ -36,7 +36,7 @@ func NewEditor() (*Editor, error) {
 	log.AddFilter("file", log.DEBUG, log.NewFileLogWriter("./ned.log"))
 
 	ed := &Editor{
-		mode: Normal,
+		mode: MNormal,
 		pm:   make(plugin.PluginManager),
 	}
 

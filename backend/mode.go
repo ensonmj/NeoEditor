@@ -8,10 +8,10 @@ import (
 type Mode int
 
 const (
-	Normal Mode = iota
-	Insert
-	Visual
-	Command
+	MNormal Mode = iota
+	MInsert
+	MVisual
+	MCommand
 )
 
 // return true if program will exit
@@ -21,12 +21,14 @@ var modeActors = map[Mode]KeyAction{}
 
 func (m Mode) String() string {
 	switch m {
-	case Normal:
+	case MNormal:
 		return "Normal"
-	case Insert:
+	case MInsert:
 		return "Insert"
-	case Visual:
+	case MVisual:
 		return "Visual"
+	case MCommand:
+		return "Command"
 	default:
 		return "Unknown"
 	}
@@ -56,10 +58,10 @@ func registerModeAction() {
 		return false, nil
 	}
 
-	modeActors[Normal] = nKA
-	modeActors[Insert] = iKA
-	modeActors[Visual] = vKA
-	modeActors[Command] = cKA
+	modeActors[MNormal] = nKA
+	modeActors[MInsert] = iKA
+	modeActors[MVisual] = vKA
+	modeActors[MCommand] = cKA
 }
 
 // TODO: find action according to accumulated keys
@@ -73,7 +75,7 @@ func runModeAction(ed *Editor, kp key.KeyPress) (bool, error) {
 	if actor, ok := keyAction[kp]; ok {
 		return actor(ed, kp)
 	} else {
-		if ed.mode == Insert {
+		if ed.mode == MInsert {
 			//ed.ActiveBuf().Insert([]rune(string(kp.Key)))
 			ed.ActiveBuf().Insert(rune(kp.Key))
 		} else {
@@ -92,24 +94,25 @@ func runModeAction(ed *Editor, kp key.KeyPress) (bool, error) {
 
 func resolvMode(ed *Editor, kp key.KeyPress) bool {
 	if kp.Key == key.Escape {
-		ed.mode = Normal
+		ed.mode = MNormal
 		log.Debug("change mode to:%s", ed.mode)
 		return true
 	}
 
 	changed := false
 	switch ed.mode {
-	case Normal:
+	case MNormal:
 		switch kp.Key {
 		case 'i':
-			ed.mode = Insert
+			ed.mode = MInsert
 			changed = true
 		case ':':
-			ed.mode = Command
+			ed.mode = MCommand
 			changed = true
 		}
-	case Insert:
-	case Visual:
+	case MInsert:
+	case MVisual:
+	case MCommand:
 	}
 
 	if changed {
