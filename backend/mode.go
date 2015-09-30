@@ -47,12 +47,24 @@ func registerModeAction() {
 	}
 
 	// insert
+	iKA[key.KeyPress{Key: key.Left}] = moveCursor
+	iKA[key.KeyPress{Key: key.Up}] = moveCursor
+	iKA[key.KeyPress{Key: key.Right}] = moveCursor
+	iKA[key.KeyPress{Key: key.Down}] = moveCursor
 	//iKA[key.KeyPress{Key: key.Escape}] = resolvMode
 
 	// visual
+	vKA[key.KeyPress{Key: key.Left}] = moveCursor
+	vKA[key.KeyPress{Key: key.Up}] = moveCursor
+	vKA[key.KeyPress{Key: key.Right}] = moveCursor
+	vKA[key.KeyPress{Key: key.Down}] = moveCursor
 	//vKA[key.KeyPress{Key: key.Escape}] = resolvMode
 
 	// command
+	cKA[key.KeyPress{Key: key.Left}] = moveCursor
+	cKA[key.KeyPress{Key: key.Up}] = moveCursor
+	cKA[key.KeyPress{Key: key.Right}] = moveCursor
+	cKA[key.KeyPress{Key: key.Down}] = moveCursor
 	cKA[key.KeyPress{Key: 'w'}] = func(ed *Editor, kp key.KeyPress) (bool, error) {
 		ed.ActiveBuf().Save()
 		return false, nil

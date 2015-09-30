@@ -5,57 +5,93 @@ import (
 	"github.com/ensonmj/NeoEditor/lib/log"
 )
 
-type View struct {
-	XOffset          int //must be 0 when wrap is on
-	YOffset          int //the line displayed in the top of window
-	RCursor, CCursor int //cursor position in the buffer(row,column)
-	XCursor, YCursor int //cursor position in the screen
-	//xUpdate, yUpdate int //start position for redraw
-	Contents [][]rune
+type Cell struct {
+	Char   rune
+	Fg, Bg uint16
 }
 
-//type CmdMoveCursor struct {
-//Direction
-//Repeat int
-//}
+type View struct {
+	RCursor, CCursor int //cursor position in the buffer(row,column)
+	XCursor, YCursor int //cursor position in the screen
+	Contents         [][]rune
+}
 
-//func (c CmdMoveCursor) Run(ed *Editor) error {
-//v := ed.ActiveView()
-//switch c.Direction {
-//case Left:
-//v.CCursor -= c.Repeat
-//case Up:
-//v.RCursor -= c.Repeat
-//case Right:
-//v.CCursor += c.Repeat
-//case Down:
-//v.RCursor += c.Repeat
-//}
+func (v *View) updateView() {
+	//log.Debug("view:%v", v)
+	// notify all ui
+	eachUI(func(ui *UI) {
+		w, h := ui.Width, ui.Height
+		vv := View{RCursor: v.RCursor, CCursor: v.CCursor, Contents: make([][]rune, h)}
+		xOffset, yOffset := 0, 0
+		if h < v.RCursor+1 {
+			yOffset = v.RCursor + 1 - h
+		}
+		vv.YCursor = v.RCursor - yOffset
+		if w < v.CCursor+1 {
+			xOffset = v.CCursor + 1 - w
+			// '\t' will occupy multi cell
+		}
+		vv.XCursor = v.CCursor - xOffset
+		for i := 0; i < h; i++ {
+			// wrap off
+			log.Debug("i:%d, xOffset:%d, yOffset:%d", i, xOffset, yOffset)
+			line := v.Contents[i+yOffset]
+			if xOffset <= len(line) {
+				vv.Contents[i] = line[xOffset:]
+			} else {
+				vv.Contents[i] = []rune{}
+			}
+		}
 
-//v.XCursor, v.YCursor = v.CCursor, v.RCursor
-//log.Debug("View:%v", v)
-//ed.PubEvent("updateView", v)
-
-//return nil
-//}
+		log.Debug("update view:%v", vv)
+		pubEvent("updateView", vv)
+	})
+}
 
 func moveCursor(ed *Editor, kp key.KeyPress) (bool, error) {
-	v := ed.ActiveView()
+	b := ed.ActiveBuf()
 	switch kp.Key {
 	case key.Left:
-		v.CCursor -= 1
+		if b.CCursor > 0 {
+			b.CCursor -= 1
+		} else if b.RCursor > 0 {
+			b.RCursor -= 1
+			b.CCursor = b.CurrLineChars() - 1
+			if b.CCursor < 0 {
+				b.CCursor = 0
+			}
+		}
 	case key.Up:
-		v.RCursor -= 1
+		if b.RCursor > 0 {
+			b.RCursor -= 1
+		}
+		if b.CCursor >= b.CurrLineChars() {
+			b.CCursor = b.CurrLineChars() - 1
+			if b.CCursor < 0 {
+				b.CCursor = 0
+			}
+		}
 	case key.Right:
-		v.CCursor += 1
+		if b.CCursor+1 < b.CurrLineChars() {
+			b.CCursor += 1
+		} else if b.RCursor+1 < b.Lines() {
+			b.RCursor += 1
+			b.CCursor = 0
+		}
 	case key.Down:
-		v.RCursor += 1
+		if b.RCursor+1 < b.Lines() {
+			b.RCursor += 1
+		}
+		if b.CCursor >= b.CurrLineChars() {
+			b.CCursor = b.CurrLineChars() - 1
+			if b.CCursor < 0 {
+				b.CCursor = 0
+			}
+		}
 	default:
 	}
 
-	v.XCursor, v.YCursor = v.CCursor, v.RCursor
-	log.Debug("View:%v", v)
-	pubEvent("updateView", v)
+	b.updateView()
 
 	return false, nil
 }

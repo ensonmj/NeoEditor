@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"runtime"
 
 	"github.com/ensonmj/NeoEditor/lib/codec"
 	"github.com/ensonmj/NeoEditor/lib/key"
@@ -49,26 +50,76 @@ func NewEditor() (*Editor, error) {
 	registerCommands()
 	registerModeAction()
 
-	rep, err := zmq.NewSocket(zmq.PULL)
+	rep, err := zmq.NewSocket(zmq.REP)
 	if err != nil {
 		return nil, err
 	}
-	rep.Bind("inproc://command")
-	rep.Bind("tcp://*:5198")
+	rep.Bind("inproc://register")
+	rep.Bind("tcp://*5197")
+	// monitor ui register
+	go func() {
+		defer func() {
+			if err := recover(); err != nil {
+				log.Critical(err)
+				trace := make([]byte, 1024)
+				// just print current routine stack
+				count := runtime.Stack(trace, false)
+				log.Critical("stack of %d bytes:%s", count, trace)
+				panic(err)
+			}
+		}()
+		for {
+			// TODO: exit gracefully
+			reqMsg, err := rep.Recv(0)
+			log.Debug("receive ui register:%s,%s", reqMsg, err)
+			if err != nil {
+				log.Debug("register monitor got an err:%s", err)
+				close(ed.done)
+				return
+			}
+			var ui UI
+			if err = codec.Deserialize([]byte(reqMsg), &ui); err != nil {
+				log.Critical(err)
+				close(ed.done)
+				return
+			}
+			registerUI(&ui)
+			ed.ActiveBuf().updateView()
 
+			repMsg, _ := codec.Serialize(ui)
+			rep.Send(string(repMsg), 0)
+		}
+	}()
+
+	pull, err := zmq.NewSocket(zmq.PULL)
+	if err != nil {
+		return nil, err
+	}
+	pull.Bind("inproc://command")
+	pull.Bind("tcp://*:5198")
 	// monitor request
 	go func() {
+		defer func() {
+			if err := recover(); err != nil {
+				log.Critical(err)
+				trace := make([]byte, 1024)
+				// just print current routine stack
+				count := runtime.Stack(trace, false)
+				log.Critical("stack of %d bytes:%s", count, trace)
+				panic(err)
+			}
+		}()
 		for {
-			cmd, err := rep.Recv(0)
-			log.Debug("received:%v,%v", cmd, err)
+			cmd, err := pull.Recv(0)
+			log.Debug("received:%s,%s", cmd, err)
 			if err != nil {
-				log.Debug("command monitor got an err:%v", err)
+				log.Debug("command monitor got an err:%s", err)
 				close(ed.done)
 				return
 			}
 			exit, err := dispatchCommand(ed, string(cmd))
 			if exit {
-				rep.Close()
+				pull.Close()
 				log.Debug("command monitor exit")
 				return
 			}
@@ -85,9 +136,18 @@ func NewEditor() (*Editor, error) {
 	}
 	pub.Bind("inproc://notification")
 	pub.Bind("tcp://*:5199")
-
 	// broadcast notification
 	go func() {
+		defer func() {
+			if err := recover(); err != nil {
+				log.Critical(err)
+				trace := make([]byte, 1024)
+				// just print current routine stack
+				count := runtime.Stack(trace, false)
+				log.Critical("stack of %d bytes:%s", count, trace)
+				panic(err)
+			}
+		}()
 		for {
 			select {
 			case ev := <-pollEvent():
@@ -125,14 +185,23 @@ func NewEditor() (*Editor, error) {
 	}
 	ed.activeBuf = 0
 	b := ed.bufs[ed.activeBuf]
-	v := b.View
-	v.Contents = b.data
-	log.Debug("View:%v", v)
-	pubEvent("updateView", v)
+
+	log.Debug("view:%v", b.View)
+	pubEvent("updateView", b.View)
 
 	// TODO: start ticker on demand
 	// main loop
 	go func() {
+		defer func() {
+			if err := recover(); err != nil {
+				log.Critical(err)
+				trace := make([]byte, 1024)
+				// just print current routine stack
+				count := runtime.Stack(trace, false)
+				log.Critical("stack of %d bytes:%s", count, trace)
+				panic(err)
+			}
+		}()
 		for {
 			select {
 			case <-ed.done:

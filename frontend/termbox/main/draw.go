@@ -27,26 +27,20 @@ func drawView(v ned.View) {
 	termbox.Clear(fg, bg)
 
 	text := v.Contents
-	x, y := 0, 0
 	cursorOnText := false
-	for _, line := range text {
-		fg, bg := termbox.ColorWhite, termbox.ColorBlack
+	for row, line := range text {
 		for col, r := range line {
-			if col < ui.width {
-				x = col
-			} else {
-				// wrap, line may have many screen lines
-				x = col - ui.width
-				y++
-			}
-			if x == v.XCursor && y == v.YCursor {
+			fg, bg := termbox.ColorWhite, termbox.ColorBlack
+
+			// cursor display
+			if col == v.XCursor && row == v.YCursor {
 				// block style cursor
 				fg = fg | termbox.AttrReverse
 				cursorOnText = true
 			}
-			termbox.SetCell(x, y, r, fg, bg)
+
+			termbox.SetCell(col, row, r, fg, bg)
 		}
-		y++
 	}
 
 	if !cursorOnText {

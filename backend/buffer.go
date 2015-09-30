@@ -50,12 +50,23 @@ func NewBuffer(fPath string, flag int, perm os.FileMode) (*Buffer, error) {
 		}
 	}
 
+	buffer.View.Contents = buffer.data
+	buffer.updateView()
+
 	return buffer, nil
 }
 
-func (b *Buffer) Contents() [][]rune {
+func (b Buffer) Contents() [][]rune {
 	log.Debug("buffer contents:%#v", b.data)
 	return b.data
+}
+
+func (b Buffer) Lines() int {
+	return len(b.data)
+}
+
+func (b Buffer) CurrLineChars() int {
+	return len(b.data[b.RCursor])
 }
 
 func (b *Buffer) Insert(char rune) error {
@@ -87,13 +98,11 @@ func (b *Buffer) Insert(char rune) error {
 		b.data[row], _ = insertIn(buf, []rune{char}, col)
 		col++
 	}
-
 	b.RCursor, b.CCursor = row, col
-	b.XCursor, b.YCursor = b.CCursor-b.XOffset, b.RCursor-b.YOffset
-	b.View.Contents = b.data
 
-	log.Debug("view:%v", b.View)
-	pubEvent("updateView", b.View)
+	v := b.View
+	v.Contents = b.data
+	v.updateView()
 
 	return nil
 }

@@ -7,6 +7,7 @@ import (
 	//"syscall"
 	"net/http"
 	_ "net/http/pprof"
+	"runtime"
 
 	ned "github.com/ensonmj/NeoEditor/backend"
 	"github.com/ensonmj/NeoEditor/frontend/common"
@@ -17,10 +18,6 @@ import (
 	zmq "github.com/pebbe/zmq4"
 )
 
-type UI struct {
-	width, height int
-}
-
 const (
 	chanBufLen = 16
 )
@@ -28,7 +25,7 @@ const (
 var (
 	shutdown chan bool
 	cmdChan  chan string
-	ui       UI
+	ui       ned.UI
 	lut      = map[termbox.Key]key.KeyPress{
 		// Omission of these are intentional due to map collisions
 		//		termbox.KeyCtrlTilde:      keys.KeyPress{Ctrl: true, Key: '~'},
@@ -99,7 +96,17 @@ var (
 func main() {
 	// /debug/pprof for profile
 	go func() {
-		http.ListenAndServe("127.0.0.1:5197", nil)
+		defer func() {
+			if err := recover(); err != nil {
+				log.Critical(err)
+				trace := make([]byte, 1024)
+				// just print current routine stack
+				count := runtime.Stack(trace, false)
+				log.Critical("stack of %d bytes:%s", count, trace)
+				panic(err)
+			}
+		}()
+		http.ListenAndServe("127.0.0.1:5196", nil)
 	}()
 
 	defer log.Close()
@@ -126,18 +133,33 @@ func main() {
 	}
 	defer termbox.Close()
 
-	ui.width, ui.height = termbox.Size()
+	ui.Width, ui.Height = termbox.Size()
 	evchan := make(chan termbox.Event, chanBufLen)
 	go func() {
+		defer func() {
+			if err := recover(); err != nil {
+				log.Critical(err)
+				trace := make([]byte, 1024)
+				// just print current routine stack
+				count := runtime.Stack(trace, false)
+				log.Critical("stack of %d bytes:%s", count, trace)
+				panic(err)
+			}
+		}()
 		for {
 			evchan <- termbox.PollEvent()
 		}
 	}()
 
-	req, _ := zmq.NewSocket(zmq.PUSH)
-	defer req.Close()
-	req.Connect("inproc://command")
-	//req.Connect("tcp://localhost:5198")
+	if _, err := ned.NewEditor(); err != nil {
+		log.Critical("create editor error:%s", err)
+		panic(err)
+	}
+
+	push, _ := zmq.NewSocket(zmq.PUSH)
+	defer push.Close()
+	push.Connect("inproc://command")
+	//push.Connect("tcp://localhost:5198")
 
 	sub, _ := zmq.NewSocket(zmq.SUB)
 	defer sub.Close()
@@ -149,13 +171,18 @@ func main() {
 	sub.SetSubscribe("updateWnd")
 	//sub.SetSubscribe("")
 
-	if _, err := ned.NewEditor(); err != nil {
-		log.Critical("create editor error:%s", err)
-		panic(err)
-	}
-
 	// Receive notification
 	go func() {
+		defer func() {
+			if err := recover(); err != nil {
+				log.Critical(err)
+				trace := make([]byte, 1024)
+				// just print current routine stack
+				count := runtime.Stack(trace, false)
+				log.Critical("stack of %d bytes:%s", count, trace)
+				panic(err)
+			}
+		}()
 		log.Debug("start receiving notification")
 		for {
 			topic, _ := sub.Recv(0)
@@ -184,13 +211,24 @@ func main() {
 		}
 	}()
 
+	req, _ := zmq.NewSocket(zmq.REQ)
+	req.Connect("inproc://register")
+	//req.Connect("tcp://localhost:5196")
+	reqMsg, _ := codec.Serialize(ui)
+	req.Send(string(reqMsg), 0)
+	repMsg, _ := req.Recv(0)
+	if err := codec.Deserialize([]byte(repMsg), &ui); err != nil {
+		log.Critical(err)
+		return
+	}
+
 	//tickChan := time.NewTicker(1 * time.Millisecond).C
 	for {
 		select {
 		case ev := <-evchan:
 			switch ev.Type {
 			case termbox.EventKey:
-				handleInput(req, ev)
+				handleInput(push, ev)
 			case termbox.EventResize:
 				handleResize(ev.Height, ev.Width)
 			case termbox.EventError:
@@ -198,7 +236,7 @@ func main() {
 				return
 			}
 		case cmd := <-cmdChan:
-			req.Send(cmd, zmq.DONTWAIT)
+			push.Send(cmd, zmq.DONTWAIT)
 		case <-shutdown:
 			log.Debug("termbox frontend quit")
 			return
@@ -207,7 +245,7 @@ func main() {
 	}
 }
 
-func handleInput(req *zmq.Socket, ev termbox.Event) {
+func handleInput(push *zmq.Socket, ev termbox.Event) {
 	var kp key.KeyPress
 	if ev.Ch != 0 {
 		kp.Key = key.Key(ev.Ch)
@@ -226,12 +264,12 @@ func handleInput(req *zmq.Socket, ev termbox.Event) {
 }
 
 func handleResize(width, height int) {
-	ui.width, ui.height = width, height
+	ui.Width, ui.Height = width, height
 }
 
 func updateWnd(w *ned.Window) {
 	log.Debug("update window:%v", w)
-	r := ned.Rect{ned.Point{0, 0}, ui.width, ui.height}
+	r := ned.Rect{ned.Point{0, 0}, ui.Width, ui.Height}
 	common.DrawWindow(w, r, drawSpliter, drawView)
 }
 
