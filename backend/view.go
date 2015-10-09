@@ -17,11 +17,15 @@ type View struct {
 }
 
 func (v *View) updateView() {
-	//log.Debug("view:%v", v)
 	// notify all ui
 	eachUI(func(ui *UI) {
 		w, h := ui.Width, ui.Height
-		vv := View{RCursor: v.RCursor, CCursor: v.CCursor, Contents: make([][]rune, h)}
+		row := h
+		if row > len(v.Contents) {
+			row = len(v.Contents)
+		}
+		vv := View{RCursor: v.RCursor, CCursor: v.CCursor, Contents: make([][]rune, row)}
+
 		xOffset, yOffset := 0, 0
 		if h < v.RCursor+1 {
 			yOffset = v.RCursor + 1 - h
@@ -32,10 +36,10 @@ func (v *View) updateView() {
 			// '\t' will occupy multi cell
 		}
 		vv.XCursor = v.CCursor - xOffset
-		for i := 0; i < h; i++ {
+		for i := 0; i < row; i++ {
 			// wrap off
-			log.Debug("i:%d, xOffset:%d, yOffset:%d", i, xOffset, yOffset)
 			line := v.Contents[i+yOffset]
+			log.Debug("i:%d, xOffset:%d, yOffset:%d, line:%v", i, xOffset, yOffset, line)
 			if xOffset <= len(line) {
 				vv.Contents[i] = line[xOffset:]
 			} else {

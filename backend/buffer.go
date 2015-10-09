@@ -26,6 +26,8 @@ func NewBuffer(fPath string, flag int, perm os.FileMode) (*Buffer, error) {
 		log.Debug("create scratch buffer")
 		buffer := &Buffer{scratch: true}
 		buffer.data = append(buffer.data, make([]rune, 0, chunkSize))
+		buffer.View.Contents = buffer.data
+		buffer.updateView()
 		return buffer, nil
 	}
 

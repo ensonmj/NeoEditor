@@ -4,12 +4,12 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"runtime"
 
 	"github.com/ensonmj/NeoEditor/lib/codec"
 	"github.com/ensonmj/NeoEditor/lib/key"
 	"github.com/ensonmj/NeoEditor/lib/log"
 	"github.com/ensonmj/NeoEditor/lib/plugin"
+	"github.com/ensonmj/NeoEditor/lib/util"
 	zmq "github.com/pebbe/zmq4"
 )
 
@@ -60,11 +60,7 @@ func NewEditor() (*Editor, error) {
 	go func() {
 		defer func() {
 			if err := recover(); err != nil {
-				log.Critical(err)
-				trace := make([]byte, 1024)
-				// just print current routine stack
-				count := runtime.Stack(trace, false)
-				log.Critical("stack of %d bytes:%s", count, trace)
+				log.Critical("%s, %s", err, util.StackTrace(false))
 				panic(err)
 			}
 		}()
@@ -101,11 +97,7 @@ func NewEditor() (*Editor, error) {
 	go func() {
 		defer func() {
 			if err := recover(); err != nil {
-				log.Critical(err)
-				trace := make([]byte, 1024)
-				// just print current routine stack
-				count := runtime.Stack(trace, false)
-				log.Critical("stack of %d bytes:%s", count, trace)
+				log.Critical("%s, %s", err, util.StackTrace(false))
 				panic(err)
 			}
 		}()
@@ -140,11 +132,7 @@ func NewEditor() (*Editor, error) {
 	go func() {
 		defer func() {
 			if err := recover(); err != nil {
-				log.Critical(err)
-				trace := make([]byte, 1024)
-				// just print current routine stack
-				count := runtime.Stack(trace, false)
-				log.Critical("stack of %d bytes:%s", count, trace)
+				log.Critical("%s, %s", err, util.StackTrace(false))
 				panic(err)
 			}
 		}()
@@ -194,11 +182,7 @@ func NewEditor() (*Editor, error) {
 	go func() {
 		defer func() {
 			if err := recover(); err != nil {
-				log.Critical(err)
-				trace := make([]byte, 1024)
-				// just print current routine stack
-				count := runtime.Stack(trace, false)
-				log.Critical("stack of %d bytes:%s", count, trace)
+				log.Critical("%s, %s", err, util.StackTrace(false))
 				panic(err)
 			}
 		}()

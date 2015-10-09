@@ -7,13 +7,13 @@ import (
 	//"syscall"
 	"net/http"
 	_ "net/http/pprof"
-	"runtime"
 
 	ned "github.com/ensonmj/NeoEditor/backend"
 	"github.com/ensonmj/NeoEditor/frontend/common"
 	"github.com/ensonmj/NeoEditor/lib/codec"
 	"github.com/ensonmj/NeoEditor/lib/key"
 	"github.com/ensonmj/NeoEditor/lib/log"
+	"github.com/ensonmj/NeoEditor/lib/util"
 	"github.com/nsf/termbox-go"
 	zmq "github.com/pebbe/zmq4"
 )
@@ -94,36 +94,29 @@ var (
 )
 
 func main() {
+	if _, err := ned.NewEditor(); err != nil {
+		log.Critical("create editor error:%s", err)
+		panic(err)
+	}
+
+	defer log.Close()
+	//log.AddFilter("console", log.DEBUG, log.NewConsoleLogWriter())
+
 	// /debug/pprof for profile
 	go func() {
 		defer func() {
 			if err := recover(); err != nil {
-				log.Critical(err)
-				trace := make([]byte, 1024)
-				// just print current routine stack
-				count := runtime.Stack(trace, false)
-				log.Critical("stack of %d bytes:%s", count, trace)
+				log.Critical("%s, %s", err, util.StackTrace(false))
 				panic(err)
 			}
 		}()
 		http.ListenAndServe("127.0.0.1:5196", nil)
 	}()
 
-	defer log.Close()
-	//log.AddFilter("console", log.DEBUG, log.NewConsoleLogWriter())
-	log.Debug("NeoEditor started")
-
 	// When SIGINT or SIGTERM is caught, write to the quitChan
 	//quitChan := make(chan os.Signal)
 	//signal.Notify(quitChan, syscall.SIGINT, syscall.SIGTERM)
 	//wg := &sync.WaitGroup{}
-
-	//defer func() {
-	//if err := recover(); err != nil {
-	//log.Critical(err)
-	//panic(err)
-	//}
-	//}()
 
 	shutdown = make(chan bool)
 	cmdChan = make(chan string, chanBufLen)
@@ -132,17 +125,14 @@ func main() {
 		panic(err)
 	}
 	defer termbox.Close()
+	log.Debug("termbox ui started")
 
 	ui.Width, ui.Height = termbox.Size()
 	evchan := make(chan termbox.Event, chanBufLen)
 	go func() {
 		defer func() {
 			if err := recover(); err != nil {
-				log.Critical(err)
-				trace := make([]byte, 1024)
-				// just print current routine stack
-				count := runtime.Stack(trace, false)
-				log.Critical("stack of %d bytes:%s", count, trace)
+				log.Critical("%s, %s", err, util.StackTrace(false))
 				panic(err)
 			}
 		}()
@@ -150,11 +140,6 @@ func main() {
 			evchan <- termbox.PollEvent()
 		}
 	}()
-
-	if _, err := ned.NewEditor(); err != nil {
-		log.Critical("create editor error:%s", err)
-		panic(err)
-	}
 
 	push, _ := zmq.NewSocket(zmq.PUSH)
 	defer push.Close()
@@ -175,11 +160,7 @@ func main() {
 	go func() {
 		defer func() {
 			if err := recover(); err != nil {
-				log.Critical(err)
-				trace := make([]byte, 1024)
-				// just print current routine stack
-				count := runtime.Stack(trace, false)
-				log.Critical("stack of %d bytes:%s", count, trace)
+				log.Critical("%s, %s", err, util.StackTrace(false))
 				panic(err)
 			}
 		}()
@@ -204,7 +185,6 @@ func main() {
 				}
 				updateWnd(&w)
 			case "exit":
-				log.Debug(msg)
 				close(shutdown)
 				return
 			}
@@ -221,6 +201,7 @@ func main() {
 		log.Critical(err)
 		return
 	}
+	log.Debug("register termbox ui successed")
 
 	//tickChan := time.NewTicker(1 * time.Millisecond).C
 	for {
@@ -238,7 +219,7 @@ func main() {
 		case cmd := <-cmdChan:
 			push.Send(cmd, zmq.DONTWAIT)
 		case <-shutdown:
-			log.Debug("termbox frontend quit")
+			log.Debug("termbox ui quit")
 			return
 			//case <-tickChan:
 		}
