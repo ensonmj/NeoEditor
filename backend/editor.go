@@ -155,6 +155,8 @@ func NewEditor() (*Editor, error) {
 		}
 	}()
 
+	confInit()
+
 	flag.Parse()
 	// Assuming that all extra arguments are files
 	if files := flag.Args(); len(files) > 0 {
