@@ -14,11 +14,13 @@ const chunkSize = 128
 // TODO: store content line by line, and support to highlight diff
 type Buffer struct {
 	View
-	scratch bool
-	fPath   string
-	file    *os.File
-	edits   []*Edit
-	data    [][]rune
+	scratch  bool
+	fPath    string
+	file     *os.File
+	edits    []*Edit
+	data     [][]rune
+	conf     Conf
+	filetype string
 }
 
 func NewBuffer(fPath string, flag int, perm os.FileMode) (*Buffer, error) {
@@ -26,7 +28,9 @@ func NewBuffer(fPath string, flag int, perm os.FileMode) (*Buffer, error) {
 		log.Debug("create scratch buffer")
 		buffer := &Buffer{scratch: true}
 		buffer.data = append(buffer.data, make([]rune, 0, chunkSize))
+		buffer.conf = Conf{}
 		buffer.View.Contents = buffer.data
+		buffer.View.buff = buffer
 		buffer.updateView()
 		return buffer, nil
 	}
@@ -35,7 +39,7 @@ func NewBuffer(fPath string, flag int, perm os.FileMode) (*Buffer, error) {
 	if err != nil {
 		return nil, err
 	}
-	log.Debug("create new file:%s", fPath)
+	log.Debug("create file:%s", fPath)
 
 	buffer := &Buffer{fPath: fPath, file: fd}
 
@@ -52,7 +56,9 @@ func NewBuffer(fPath string, flag int, perm os.FileMode) (*Buffer, error) {
 		}
 	}
 
+	buffer.conf = Conf{}
 	buffer.View.Contents = buffer.data
+	buffer.View.buff = buffer
 	buffer.updateView()
 
 	return buffer, nil
@@ -65,6 +71,10 @@ func (b Buffer) Contents() [][]rune {
 
 func (b Buffer) Lines() int {
 	return len(b.data)
+}
+
+func (b Buffer) CurrLine() []rune {
+	return b.data[b.RCursor]
 }
 
 func (b Buffer) CurrLineChars() int {
@@ -169,4 +179,34 @@ func (b *Buffer) Close() {
 		b.file.Write([]byte(string(line) + "\n"))
 	}
 	b.file.Close()
+}
+
+func (b Buffer) getConfValueBool(key string) bool {
+	var item ConfItem
+	var ok bool
+	if item, ok = b.conf[key]; !ok {
+		item = getFileTypeConfItem(b.filetype, key)
+		b.conf[key] = item
+	}
+	return getConfValueBool(item)
+}
+
+func (b Buffer) getConfValueInt(key string) int {
+	var item ConfItem
+	var ok bool
+	if item, ok = b.conf[key]; !ok {
+		item = getFileTypeConfItem(b.filetype, key)
+		b.conf[key] = item
+	}
+	return getConfValueInt(item)
+}
+
+func (b Buffer) getConfValueString(key string) string {
+	var item ConfItem
+	var ok bool
+	if item, ok = b.conf[key]; !ok {
+		item = getFileTypeConfItem(b.filetype, key)
+		b.conf[key] = item
+	}
+	return getConfValueString(item)
 }
